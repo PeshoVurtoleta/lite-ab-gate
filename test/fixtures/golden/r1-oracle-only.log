@@ -1,0 +1,16 @@
+HEADER rung=ALL ORACLE-ONLY (no clock) node <node> arch <arch> v8 <v8> cpu <cpu> K=11 C=3 ops=1024,1024,1024 minWindow=64,32,64 inject=null
+HEADER spec lite-ohlc-r1 lane-file <lane-file> lane-sha256=2377d1937815b1d22d527a1ce2f9eeb4f0f496cf14065873d466657aea17c7e2 transform=Ohlc.js:edited,baseline.mjs:edited | tool <tool>
+HEADER frozen Ohlc.js /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/test/fixtures/r1/frozen/Ohlc.js sha256 a600028c ok; live /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteOhlc/Ohlc.js byte-identical -- ok (AB-G2)
+HEADER frozen baseline.mjs /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/test/fixtures/r1/frozen/baseline.mjs sha256 9c875a5e ok; live /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteOhlc/bench/baseline.mjs byte-identical -- ok (AB-G2)
+HEADER columns: A = base kernel, B = candidate, AA = A twin (fresh compilation), SLOW = A + spin at the A anchor, AB = A twin (fresh compilation) timed at B's reps, present only when B's reps differ from A's (then B/AB and wordAB are printed; else n/a); K + 1 rounds per window, round 0 a warm round discarded from every column (WARM line); flags --expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc
+HEADER lane bounds:1e5:1e3 A=Ohlc.js B=baseline.mjs ops=1024 minWindow=64 spin=128 recLen=9
+HEADER lane bounds:1e5:1e5 A=Ohlc.js B=baseline.mjs ops=1024 minWindow=32 spin=112 recLen=9
+HEADER lane null:1e5:1e3 A=Ohlc.js B=Ohlc.js ops=1024 minWindow=64 spin=128 recLen=9
+HEADER rule: per OS, PASS = every gated lane reads its GATED word with its controls valid (aa median in [0.95, 1.05], slow median > 1.25 and q1 > 1.1, B/AB (B against AB = A at B's reps) reading the same word as B/A when B's reps differ from A's (else REPS-DRIFT; ab = AB / A is REPORTED, no band; equal reps print ab, B/AB, wordAB = n/a), bop A, B, AA, SLOW (+ AB when present) each in [0, 1/64), all finite); FINDING = a clean gated lane reads another word (even with other gated lanes VOID); NO VERDICT = any VOID or missing gated lane, a wrong run shape (one HEADER rung=ALL TIMED with K=11 C=3 and the shape fields, inject=null, one HEADER spec line with this lane file's lane-sha256 and transform=, one PROV start / end, one RESULT per lane) or any STOP / CRASH. NO VERDICT is never a PASS.
+HEADER GATED bounds:1e5:1e3=SLOWER bounds:1e5:1e5=SLOWER null:1e5:1e3=WITHIN; every other lane REPORTED
+PROV start <time> load <load> busy-node [<busy>] quiet-lock <quiet-lock>
+ORACLE lane=bounds:1e5:1e3 (gated) A=Ohlc.js B=baseline.mjs copies=15 records-checked=46080 x 9 fields fold ok tf=15/15 tf-after-fold=15/15 data-elements-compared=27046080 ok
+ORACLE lane=bounds:1e5:1e5 (gated) A=Ohlc.js B=baseline.mjs copies=15 records-checked=46080 x 9 fields fold ok tf=15/15 tf-after-fold=15/15 data-elements-compared=27046080 ok
+ORACLE lane=null:1e5:1e3 (gated) A=Ohlc.js B=Ohlc.js copies=15 records-checked=46080 x 9 fields fold ok tf=15/15 tf-after-fold=15/15 data-elements-compared=27046080 ok
+PROV end <time> load <load> busy-node [<busy>] quiet-lock <quiet-lock>
+ORACLE-ONLY ALL: lanes=3 records-checked=138240 -> clean

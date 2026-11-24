@@ -1,0 +1,894 @@
+{
+ "source": {
+  "abGateSha256": "7e0f9262f5f9b5fff5dee7c3a35a7f25c8b604164a3a45059e1619f0432a7f35",
+  "fixtureShas": {
+   "ubuntu": "c7bdc7bf1eb0e6ccb7e17765da7ff21effe615238a46c1dd1d2f912bc66e0f58",
+   "macos": "569b7d183451150b3ea8fff425b9a55f8351cbd80160973862e91b22ce3d46fe"
+  },
+  "litebisectCommit": "b5c298831debaa70aac3a140d28003f10d92a46f"
+ },
+ "node": "v26.8.2",
+ "date": "2026-11-24T05:54:43.922Z",
+ "spec": {
+  "laneIds": [
+   "uni:256",
+   "walk:256:1",
+   "walk:256:4",
+   "walk:256:32",
+   "walk:256:64",
+   "uni:4096",
+   "walk:4096:1",
+   "walk:4096:4",
+   "walk:4096:64",
+   "walk:4096:512",
+   "uni:65536",
+   "walk:65536:1",
+   "walk:65536:4",
+   "walk:65536:64",
+   "walk:65536:8192",
+   "ro:16",
+   "ro:256",
+   "ro:4096",
+   "ro:65536",
+   "fw:16",
+   "fw:128",
+   "fw:1024",
+   "fw:2048"
+  ],
+  "gated": {
+   "uni:256": "SLOWER",
+   "uni:4096": "SLOWER",
+   "uni:65536": "SLOWER",
+   "walk:4096:1": "FASTER",
+   "walk:65536:1": "FASTER",
+   "walk:65536:4": "FASTER",
+   "walk:256:4": "SLOWER",
+   "ro:16": "FASTER",
+   "ro:256": "FASTER",
+   "ro:4096": "FASTER",
+   "ro:65536": "FASTER",
+   "fw:16": "SLOWER",
+   "fw:128": "SLOWER"
+  },
+  "shape": [
+   [
+    "NQ2",
+    "524288"
+   ],
+   [
+    "minWindow",
+    "131072"
+   ]
+  ],
+  "K": 11,
+  "C": 3
+ },
+ "rows": [
+  {
+   "id": "F1 ubuntu verbatim",
+   "base": "ubuntu",
+   "muts": [],
+   "textSha": "c7bdc7bf1eb0e6ccb7e17765da7ff21effe615238a46c1dd1d2f912bc66e0f58",
+   "code": 0,
+   "vline": "VERDICT PASS gated=13/13 clean, every word as expected | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F2 macos verbatim (VOIDs on REPORTED lanes only)",
+   "base": "macos",
+   "muts": [],
+   "textSha": "569b7d183451150b3ea8fff425b9a55f8351cbd80160973862e91b22ce3d46fe",
+   "code": 0,
+   "vline": "VERDICT PASS gated=13/13 clean, every word as expected | cpu Apple M1 (Virtual) | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 FASTER 0.861[0.773..0.900] NOT-CLEAN VOID(AA-DRIFT) + VOID-line(AA-DRIFT) + aa 1.075[0.922..1.229] not in [0.95, 1.05], walk:256:32 SLOWER 2.329[2.239..2.480], walk:256:64 SLOWER 2.635[2.339..2.733], walk:4096:4 FASTER 0.853[0.845..0.900], walk:4096:64 SLOWER 1.814[1.771..1.853], walk:4096:512 SLOWER 2.481[2.451..2.558], walk:65536:64 SLOWER 1.134[1.121..1.156], walk:65536:8192 SLOWER 1.918[1.863..2.023] NOT-CLEAN VOID(AA-DRIFT) + VOID-line(AA-DRIFT) + aa 1.075[0.993..1.093] not in [0.95, 1.05], fw:1024 SLOWER 1.100[1.084..1.105], fw:2048 WITHIN 1.029[1.021..1.062]"
+  },
+  {
+   "id": "F3 gated ro:16 rewritten consistently to SLOWER",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=0.338[0.338..0.339] word=FASTER",
+     "B/A=1.338[1.338..1.339] word=SLOWER"
+    ]
+   ],
+   "textSha": "a0ef094aa07994123562157668236dafa8a26a582880ff9a78cec9549beef296",
+   "code": 3,
+   "vline": "VERDICT FINDING wrong-gated=[ro:16 SLOWER 1.338[1.338..1.339] expected FASTER] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F4 gated uni:4096 VOID=[AA-DRIFT], aa out of band",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "aa=1.001[1.000..1.003] slow=5.821[5.815..5.823]",
+     "aa=1.080[1.070..1.090] slow=5.821[5.815..5.823]"
+    ],
+    [
+     "sub",
+     "branches=3145826\n",
+     "branches=3145826 VOID=[AA-DRIFT 1.080[1.070..1.090]]\n"
+    ]
+   ],
+   "textSha": "9889f3873ef3c51c811ec1525412b42c273b3f331b27d0f8b9c07327d7c8d1fc",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 VOID(AA-DRIFT) + aa 1.080[1.070..1.090] not in [0.95, 1.05]] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F5 macos gated fw:16 RESULT line deleted",
+   "base": "macos",
+   "muts": [
+    [
+     "drop",
+     "RESULT lane=fw:16 "
+    ]
+   ],
+   "textSha": "30c7e91a70056e5f789cb380b5c4a300bbd5f0b53ced410f23cc8af44b11e2d7",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[no RESULT for 1 lane(s) fw:16] gated-clean=12/13 | cpu Apple M1 (Virtual) | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 FASTER 0.861[0.773..0.900] NOT-CLEAN VOID(AA-DRIFT) + VOID-line(AA-DRIFT) + aa 1.075[0.922..1.229] not in [0.95, 1.05], walk:256:32 SLOWER 2.329[2.239..2.480], walk:256:64 SLOWER 2.635[2.339..2.733], walk:4096:4 FASTER 0.853[0.845..0.900], walk:4096:64 SLOWER 1.814[1.771..1.853], walk:4096:512 SLOWER 2.481[2.451..2.558], walk:65536:64 SLOWER 1.134[1.121..1.156], walk:65536:8192 SLOWER 1.918[1.863..2.023] NOT-CLEAN VOID(AA-DRIFT) + VOID-line(AA-DRIFT) + aa 1.075[0.993..1.093] not in [0.95, 1.05], fw:1024 SLOWER 1.100[1.084..1.105], fw:2048 WITHIN 1.029[1.021..1.062]"
+  },
+  {
+   "id": "F6 F3 + F4: FINDING wins (AB-G1)",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=0.338[0.338..0.339] word=FASTER",
+     "B/A=1.338[1.338..1.339] word=SLOWER"
+    ],
+    [
+     "sub",
+     "aa=1.001[1.000..1.003] slow=5.821[5.815..5.823]",
+     "aa=1.080[1.070..1.090] slow=5.821[5.815..5.823]"
+    ],
+    [
+     "sub",
+     "branches=3145826\n",
+     "branches=3145826 VOID=[AA-DRIFT 1.080[1.070..1.090]]\n"
+    ]
+   ],
+   "textSha": "c3052df6eccebedf02fac89e816aa74706080f5958147461ca71676948e2abfe",
+   "code": 3,
+   "vline": "VERDICT FINDING wrong-gated=[ro:16 SLOWER 1.338[1.338..1.339] expected FASTER] not-clean=[uni:4096 VOID(AA-DRIFT) + aa 1.080[1.070..1.090] not in [0.95, 1.05]] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F7 gated walk:4096:1 word changed, numbers kept",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=0.604[0.603..0.606] word=FASTER",
+     "B/A=0.604[0.603..0.606] word=SLOWER"
+    ]
+   ],
+   "textSha": "85056d06c661d16427b6123cd249f10d2c86d1822e47b0f9276ed82f1a146ff0",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[walk:4096:1 printed word=SLOWER but B/A 0.604[0.603..0.606] reads FASTER] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F8 gated fw:128 aa out of band, no VOID tag",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "aa=1.000[0.999..1.002] slow=2.730[2.730..2.735]",
+     "aa=1.080[1.070..1.090] slow=2.730[2.730..2.735]"
+    ]
+   ],
+   "textSha": "ecba7d3f9637407b1c6b6a8aeaa3a4bd294a571018ad1c2661551a5fa93f16c5",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[fw:128 aa 1.080[1.070..1.090] not in [0.95, 1.05]] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F9 STOP line appended",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "append",
+     "STOP HARNESS: selftest F9 control\n"
+    ]
+   ],
+   "textSha": "0cb214cdbb8718ef3ad2d9ff4de8a2b2953fc02941ede978d7de6da3c4c5aac2",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (STOP HARNESS) shape=[STOP HARNESS] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F10 HEADER K=7",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     " K=11 C=3 ",
+     " K=7 C=3 "
+    ]
+   ],
+   "textSha": "f6947a30579717a7af3767a9e23bca6352f0d710d4535c3f2c3853ae98c718cc",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[K=7 (want 11)] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F11 REPORTED walk:256:32 word flipped",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=2.517[2.516..2.520] word=SLOWER",
+     "B/A=2.517[2.516..2.520] word=FASTER"
+    ]
+   ],
+   "textSha": "b8ae2e1c6899ea52bb79f334cbfe8a4b47213d1799ebe0249540ab7061313427",
+   "code": 0,
+   "vline": "VERDICT PASS gated=13/13 clean, every word as expected | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 FASTER 2.517[2.516..2.520] NOT-CLEAN printed word=FASTER but B/A 2.517[2.516..2.520] reads SLOWER, walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F12 HEADER C=2",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     " C=3 NQ2=",
+     " C=2 NQ2="
+    ]
+   ],
+   "textSha": "85828dc8d9f904ccc42423a89876fc84dfef7b786c246dbc994537d397705963",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[C=2 (want 3)] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F13 HEADER inject=aa-drift",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "inject=null\n",
+     "inject=aa-drift\n"
+    ]
+   ],
+   "textSha": "27c4391476be97c46e85ff650a1d23023210e37b6edbef1ae951614a0978c41a",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[inject=aa-drift (want null)] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F14 HEADER rung=AB2",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "HEADER rung=ALL TIMED",
+     "HEADER rung=AB2 TIMED"
+    ]
+   ],
+   "textSha": "294d4a05c9ae2a261f8699a20f7b514d352a2f06dbb00108085dc0f6ef4404ec",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[rung=AB2 (want ALL)] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F15 PROV end line deleted",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "drop",
+     "PROV end "
+    ]
+   ],
+   "textSha": "bd8a8459b2d8a59f3c016579c69fd67cb3219cd9a7ad69a53a3a69ecd619c136",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[0 PROV end lines (want 1)] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F16 CRASH line appended",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "append",
+     "CRASH Error: selftest F16 control\n"
+    ]
+   ],
+   "textSha": "bc4fbf9d0e542ad6e7a6b75505291748b56db4778da160b29c108e339f99ee12",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (CRASH) shape=[CRASH] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F17 REPORTED walk:256:32 RESULT line twice",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "dup",
+     "RESULT lane=walk:256:32 "
+    ]
+   ],
+   "textSha": "d340769f0d6dd9d1af2d49755499ace567878f7e4a9725e7c3ebe826d611c069",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[several RESULT lines for walk:256:32] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 missing, walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F18 VOID line for gated ro:256, no tag",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "append",
+     "VOID NOT-TF lane=ro:256: NOT-TF A#1\n"
+    ]
+   ],
+   "textSha": "e42ccbf1f0a793e23f550f00b2eca3ce239b25c48789c92a0efb99bc5ab194b0",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[ro:256 VOID-line(NOT-TF)] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F19 gated fw:16 slow median 1.200",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "slow=3.023[3.019..3.026]",
+     "slow=1.200[1.150..1.250]"
+    ]
+   ],
+   "textSha": "24e0baaaf6a1ca5483d85f928dd027084efa8d9c264a918b652def0cca1ac21a",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[fw:16 slow 1.200[1.150..1.250] not med > 1.25 and q1 > 1.10] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F20 gated fw:16 slow q1 1.050 (median kept)",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "slow=3.023[3.019..3.026]",
+     "slow=3.023[1.050..3.026]"
+    ]
+   ],
+   "textSha": "683737a4e1f5371c43b8f0e49c3877abac18cd6e51b5d64be8f0e87f36e9765b",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[fw:16 slow 3.023[1.050..3.026] not med > 1.25 and q1 > 1.10] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F21 gated uni:256 bop column A missing",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     ",A:0.0000 win=262144 reps=2 branches=2098642",
+     " win=262144 reps=2 branches=2098642"
+    ]
+   ],
+   "textSha": "b7f569b377d6a36efe0a33b2cdc8d34f408647145fc666d13e15da91019a65fb",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop SLOW:0.0000,AA:0.0000,B:0.0000 not A, B, AA, SLOW each < 1/64] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F22 gated uni:256 bop B 0.0200",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B:0.0000,A:0.0000 win=262144 reps=2 branches=2098642",
+     "B:0.0200,A:0.0000 win=262144 reps=2 branches=2098642"
+    ]
+   ],
+   "textSha": "58812985fbbed93f58b5d36224325925937f014e19cea56a88c2f77380371e7a",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop SLOW:0.0000,AA:0.0000,B:0.0200,A:0.0000 not A, B, AA, SLOW each < 1/64] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F23 gated uni:256 B/A q3 NaN (word unchanged)",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=2.912[2.903..2.918]",
+     "B/A=2.912[2.903..NaN]"
+    ]
+   ],
+   "textSha": "7deb57100bc4f92a0121c559c66fbc9e813a310b253209a8a4ef67a28514098f",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 B/A not finite] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F24 HEADER rung= line twice",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "dup",
+     "HEADER rung="
+    ]
+   ],
+   "textSha": "c9385001ca4e717515b13caf7ded78a26f882e821f1be1e08a89a1efe444920c",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[2 HEADER rung= lines (want 1)] gated-clean=13/13 | cpu ? | arch not printed | node ?",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F25 RESULT for an unknown lane",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "append",
+     "RESULT lane=walk:1:1 (reported) B/A=1.000[1.000..1.000] word=WITHIN\n"
+    ]
+   ],
+   "textSha": "2d33d07e6e41ae06c91a7540ae520c6037981bb4f8e023680f3c9554c3cafd3e",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[RESULT for unknown lane(s) walk:1:1] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F26 gated ro:4096 VOID=[NOT-TF] tag only",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "branches=1572910\n",
+     "branches=1572910 VOID=[NOT-TF A#1]\n"
+    ]
+   ],
+   "textSha": "f636958f47283bfedcdf1561756e158f3b5e7ae0db90ee112af2192de14d8c74",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[ro:4096 VOID(NOT-TF)] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F27 gated ro:16 wrong word but VOID: never a FINDING",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=0.338[0.338..0.339] word=FASTER",
+     "B/A=1.338[1.338..1.339] word=SLOWER"
+    ],
+    [
+     "sub",
+     "branches=1089206\n",
+     "branches=1089206 VOID=[NOT-TF A#1]\n"
+    ]
+   ],
+   "textSha": "7d1498e711a0f7360a24c718293358eef9aa8b1bf60ce2faf479229c159e15f4",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[ro:16 VOID(NOT-TF)] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F28 STOP + a clean wrong gated word: NO VERDICT lists it",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=0.338[0.338..0.339] word=FASTER",
+     "B/A=1.338[1.338..1.339] word=SLOWER"
+    ],
+    [
+     "append",
+     "STOP HARNESS: selftest F28 control\n"
+    ]
+   ],
+   "textSha": "099f089dbe88d762af8feed4d37b4f6760d8aac73c1c6a66ce44d0cafd2d5208",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (STOP HARNESS) shape=[STOP HARNESS] wrong-gated=[ro:16 SLOWER 1.338[1.338..1.339] expected FASTER] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F29 HEADER not TIMED",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "HEADER rung=ALL TIMED",
+     "HEADER rung=ALL ORACLE-ONLY (no clock)"
+    ]
+   ],
+   "textSha": "56cfc48f8fd308f7b424fb6955d37ebe85c3b23eeb5abe07314e50d575588f71",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[not TIMED] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F30 HEADER unparsed",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     " NQ2=",
+     " NQ3="
+    ]
+   ],
+   "textSha": "cdad6a195e301295697c7d077797141b39e237b0e2ca532562c1cd29dbb2e291",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[HEADER rung= line unparsed] gated-clean=13/13 | cpu ? | arch not printed | node ?",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F31 gated uni:256 bop column A twice, SLOW absent",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "bop=SLOW:0.0000,AA:0.0000,B:0.0000,A:0.0000 win=262144 reps=2 branches=2098642",
+     "bop=A:0.0000,AA:0.0000,B:0.0000,A:0.0000 win=262144 reps=2 branches=2098642"
+    ]
+   ],
+   "textSha": "b699e06f081c27cceaa66babc06ca8be57bb318bea9e8e4eb7fe992cffa5467d",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop A:0.0000,AA:0.0000,B:0.0000,A:0.0000 not A, B, AA, SLOW each < 1/64] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F32 gated uni:256 bop unknown column TF",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "bop=SLOW:0.0000,AA:0.0000,B:0.0000,A:0.0000 win=262144 reps=2 branches=2098642",
+     "bop=TF:0.0000,AA:0.0000,B:0.0000,A:0.0000 win=262144 reps=2 branches=2098642"
+    ]
+   ],
+   "textSha": "51cf6d1549b4c89b897af912bf40358cffec8a237cedb800b5c87e5d2a3a05ec",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop TF:0.0000,AA:0.0000,B:0.0000,A:0.0000 not A, B, AA, SLOW each < 1/64] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F33 gated uni:256 bop malformed cell",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "bop=SLOW:0.0000,AA:0.0000,B:0.0000,A:0.0000 win=262144 reps=2 branches=2098642",
+     "bop=SLOW:0.0000,AA:0.0000,B:0.0000,A:0.0000:9 win=262144 reps=2 branches=2098642"
+    ]
+   ],
+   "textSha": "bb6587dbbb675c2ff611e87237daabb082dabce43ef7ff733ec525274ccf79f6",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop SLOW:0.0000,AA:0.0000,B:0.0000,A:0.0000:9 not A, B, AA, SLOW each < 1/64] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F34 gated ro:16 word= field twice",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "branches=1089206\n",
+     "branches=1089206 word=SLOWER\n"
+    ]
+   ],
+   "textSha": "12babae0a4116fa1062761d66edfba9de810a9da5380b4cb3c4d02fed6835479",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[ro:16 printed word=null but B/A 0.338[0.338..0.339] reads FASTER] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F35 PROV end line twice",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "dup",
+     "PROV end "
+    ]
+   ],
+   "textSha": "93034c973130ff981f5b42f5588b834c86fdaa64e78a9379dad7e19817b3abd5",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[2 PROV end lines (want 1)] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F36 gated uni:256 bop A empty (null is not zero)",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "bop=SLOW:0.0000,AA:0.0000,B:0.0000,A:0.0000 win=262144 reps=2 branches=2098642",
+     "bop=SLOW:0.0000,AA:0.0000,B:0.0000,A: win=262144 reps=2 branches=2098642"
+    ]
+   ],
+   "textSha": "fb679daf8af071e7dbdb61696fa008abc2afa452dc91534d23758c41e6a13b9e",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop SLOW:0.0000,AA:0.0000,B:0.0000,A: not A, B, AA, SLOW each < 1/64] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F37 gated uni:256 bop B -0.0001 (just below the 0 floor)",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "bop=SLOW:0.0000,AA:0.0000,B:0.0000,A:0.0000 win=262144 reps=2 branches=2098642",
+     "bop=SLOW:0.0000,AA:0.0000,B:-0.0001,A:0.0000 win=262144 reps=2 branches=2098642"
+    ]
+   ],
+   "textSha": "06e0a6eb47e9489cc8205cb5ffe8f0e909ba915c8be0e0bf3b76e82528a0dda0",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop B:-0.0001 negative (want >= 0)] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F38 gated uni:4096 aa q1 NaN (median kept)",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "aa=1.001[1.000..1.003] slow=5.821[5.815..5.823]",
+     "aa=1.001[NaN..1.003] slow=5.821[5.815..5.823]"
+    ]
+   ],
+   "textSha": "bc42024ebef198aa1d6890643f440ef2d4660ad42107d1ae23301bd324b82b31",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 aa 1.001[NaN..1.003] not finite] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F39 gated uni:4096 aa q3 NaN (median kept)",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "aa=1.001[1.000..1.003] slow=5.821[5.815..5.823]",
+     "aa=1.001[1.000..NaN] slow=5.821[5.815..5.823]"
+    ]
+   ],
+   "textSha": "77795553e9296a3e0a1ae602e0b0bedd9427a188e81c69576732db1457ebe014",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 aa 1.001[1.000..NaN] not finite] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F40 gated uni:4096 slow q3 NaN (median, q1 kept)",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "aa=1.001[1.000..1.003] slow=5.821[5.815..5.823]",
+     "aa=1.001[1.000..1.003] slow=5.821[5.815..NaN]"
+    ]
+   ],
+   "textSha": "1a7e9c8cc08498fb66414ce8ab92c4d29a4557cb1cedb2099b37c9485f49e3be",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 slow 5.821[5.815..NaN] not finite] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F41 HEADER NQ2=1",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     " NQ2=524288 ",
+     " NQ2=1 "
+    ]
+   ],
+   "textSha": "296c9774f88b9d4a515b481637a56270be829f21c24b82d6afd925be701195c5",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[NQ2=1 (want 524288)] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F42 HEADER minWindow=1",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     " minWindow=131072 ",
+     " minWindow=1 "
+    ]
+   ],
+   "textSha": "f9d0d39db66afdba2e9b7f03b2465d044cc933a0f7b6fe70159cf203a92a2249",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[minWindow=1 (want 131072)] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F43 PROV start line deleted",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "drop",
+     "PROV start "
+    ]
+   ],
+   "textSha": "5df890f536d56ca671059eceb1c9c76b156f82898344e31cb22876cf304a5df6",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[0 PROV start lines (want 1)] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F44 PROV start line twice",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "dup",
+     "PROV start "
+    ]
+   ],
+   "textSha": "8e0489bc966076a4de64b1a8cfe4ae173c8bfab81d57e5899e276ffe52511ac6",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (run shape) shape=[2 PROV start lines (want 1)] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "F45 gated uni:4096 aa q1 Infinity (310-digit numeral)",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "aa=1.001[1.000..1.003] slow=5.821[5.815..5.823]",
+     "aa=1.001[1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.000..1.003] slow=5.821[5.815..5.823]"
+    ]
+   ],
+   "textSha": "77fd4c3fc894ba86fb5f7bf26cb76596245bc1bf5810e1fed7150a389cd4d637",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 aa 1.001[Infinity..1.003] not finite] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "B1 gated uni:4096 aa median exactly 0.950",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "aa=1.001[1.000..1.003] slow=5.821[5.815..5.823]",
+     "aa=0.950[0.940..0.960] slow=5.821[5.815..5.823]"
+    ]
+   ],
+   "textSha": "838421835488175dd44aee2e877e7e891897d46321f9b2a9c0a9fe00f99045b8",
+   "code": 0,
+   "vline": "VERDICT PASS gated=13/13 clean, every word as expected | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "B2 gated uni:4096 aa median exactly 1.050",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "aa=1.001[1.000..1.003] slow=5.821[5.815..5.823]",
+     "aa=1.050[1.040..1.060] slow=5.821[5.815..5.823]"
+    ]
+   ],
+   "textSha": "80db5d22dce2f359688ccab91e9bd4cee1a2a63f3a4bc4e1eed1c5a6c93070d2",
+   "code": 0,
+   "vline": "VERDICT PASS gated=13/13 clean, every word as expected | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "B3 gated fw:16 slow median exactly 1.250",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "slow=3.023[3.019..3.026]",
+     "slow=1.250[1.200..1.300]"
+    ]
+   ],
+   "textSha": "1afe3d70862000258c2c385d6b8e0b3d42df9c1d9a93eff7ea6e6c8b0ec50e79",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[fw:16 slow 1.250[1.200..1.300] not med > 1.25 and q1 > 1.10] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "B4 gated fw:16 slow q1 exactly 1.100",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "slow=3.023[3.019..3.026]",
+     "slow=3.023[1.100..3.026]"
+    ]
+   ],
+   "textSha": "0fc992dee68939be0b22ecb24c725daa00efd8c52f73f37bb89f41d6b5a3c204",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[fw:16 slow 3.023[1.100..3.026] not med > 1.25 and q1 > 1.10] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "B5 gated uni:256 bop B exactly 1/64",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B:0.0000,A:0.0000 win=262144 reps=2 branches=2098642",
+     "B:0.015625,A:0.0000 win=262144 reps=2 branches=2098642"
+    ]
+   ],
+   "textSha": "1b7729877e443b1011074e381796721472d94a680c3cac1c5ddd5bde80a71c6e",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop SLOW:0.0000,AA:0.0000,B:0.015625,A:0.0000 not A, B, AA, SLOW each < 1/64] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "B6 gated ro:16 B/A median exactly 1.050, WITHIN",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=0.338[0.338..0.339] word=FASTER",
+     "B/A=1.050[1.040..1.060] word=WITHIN"
+    ]
+   ],
+   "textSha": "328fd42c6cffdad3fd91d8a92c10c104c8deacd96fc4fa87b1f65f25006ac292",
+   "code": 3,
+   "vline": "VERDICT FINDING wrong-gated=[ro:16 WITHIN 1.050[1.040..1.060] expected FASTER] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "B7 gated ro:16 B/A q1 exactly 1.000, WITHIN",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=0.338[0.338..0.339] word=FASTER",
+     "B/A=1.100[1.000..1.200] word=WITHIN"
+    ]
+   ],
+   "textSha": "ac0813627f34e20f2287d8ba99d1d7fdc10be4eb0ebed483286338fef227b491",
+   "code": 3,
+   "vline": "VERDICT FINDING wrong-gated=[ro:16 WITHIN 1.100[1.000..1.200] expected FASTER] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "B8 gated ro:16 B/A median exactly 0.950, WITHIN",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=0.338[0.338..0.339] word=FASTER",
+     "B/A=0.950[0.940..0.960] word=WITHIN"
+    ]
+   ],
+   "textSha": "ac46e7072097a82c365e2e74e17c59fb3854e9a9512b0e86412d8aeee22657e8",
+   "code": 3,
+   "vline": "VERDICT FINDING wrong-gated=[ro:16 WITHIN 0.950[0.940..0.960] expected FASTER] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "B9 gated ro:16 B/A q3 exactly 1.000, WITHIN",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "B/A=0.338[0.338..0.339] word=FASTER",
+     "B/A=0.900[0.800..1.000] word=WITHIN"
+    ]
+   ],
+   "textSha": "4ae096ecae5dd29a1d74cbd160706819eac8687d19ca88e3c247c85db1011247",
+   "code": 3,
+   "vline": "VERDICT FINDING wrong-gated=[ro:16 WITHIN 0.900[0.800..1.000] expected FASTER] gated-clean=13/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  },
+  {
+   "id": "B10 gated uni:4096 aa q1 literal Infinity",
+   "base": "ubuntu",
+   "muts": [
+    [
+     "sub",
+     "aa=1.001[1.000..1.003] slow=5.821[5.815..5.823]",
+     "aa=1.001[Infinity..1.003] slow=5.821[5.815..5.823]"
+    ]
+   ],
+   "textSha": "6fb4af29961d11993332a8d1906798793d2f2a226f1596be404fcd69d101ac67",
+   "code": 2,
+   "vline": "VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 aa 1.001[NaN..1.003] not finite] gated-clean=12/13 | cpu AMD EPYC 9V45 96-Core Processor | arch not printed | node v26.8.2",
+   "rline": "REPORTED (never read by the verdict) walk:256:1 WITHIN 1.016[1.012..1.019], walk:256:32 SLOWER 2.517[2.516..2.520], walk:256:64 SLOWER 2.762[2.760..2.762], walk:4096:4 FASTER 0.879[0.878..0.883], walk:4096:64 SLOWER 1.748[1.747..1.752], walk:4096:512 SLOWER 2.331[2.330..2.333], walk:65536:64 SLOWER 1.179[1.178..1.180], walk:65536:8192 SLOWER 2.105[2.104..2.106], fw:1024 SLOWER 1.075[1.072..1.079], fw:2048 WITHIN 1.040[1.039..1.041]"
+  }
+ ]
+}

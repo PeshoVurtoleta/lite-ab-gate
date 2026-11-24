@@ -1,0 +1,9 @@
+# case no-args argv=[] exit=1
+STOP CLI: usage: ab-proto.mjs <lane-file.mjs> --run ALL|<ids> [--K k] | --oracle-only | --selftest | --verdict-file <log|->
+VERDICT NO VERDICT (STOP CLI) no spec loaded
+# case bad-flag argv=["toy-lane.mjs","--rnu","ALL"] exit=1
+STOP CLI: unknown flag --rnu (did you mean --run?)
+VERDICT NO VERDICT (STOP CLI) no spec loaded
+# case K-0 argv=["toy-lane.mjs","--run","ALL","--K","0"] exit=1
+STOP CLI: --K 1..51
+VERDICT NO VERDICT (STOP CLI) no spec loaded
