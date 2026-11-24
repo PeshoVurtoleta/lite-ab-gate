@@ -1,0 +1,57 @@
+{
+  "name": "@zakkster/lite-ab-gate",
+  "version": "0.0.0",
+  "description": "STATISTICAL timing A/B gate for zero-GC kernels: freshly compiled A and B copies, a per-run A/A noise twin, fail-closed verdict words (FASTER / SLOWER / WITHIN / VOID). Run once per release candidate, never inside npm test.",
+  "author": "Zahary Shinikchiev <shinikchiev@yahoo.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PeshoVurtoleta/lite-ab-gate.git"
+  },
+  "homepage": "https://github.com/PeshoVurtoleta/lite-ab-gate#readme",
+  "bugs": {
+    "url": "https://github.com/PeshoVurtoleta/lite-ab-gate/issues",
+    "email": "shinikchiev@yahoo.com"
+  },
+  "type": "module",
+  "main": "./ABGate.js",
+  "module": "./ABGate.js",
+  "types": "./ABGate.d.ts",
+  "exports": {
+    ".": {
+      "types": "./ABGate.d.ts",
+      "node": "./ABGate.js",
+      "import": "./ABGate.js",
+      "default": "./ABGate.js"
+    }
+  },
+  "files": [
+    "ABGate.js",
+    "ABGate.d.ts",
+    "templates/ab.yml",
+    "examples/ab.gate.mjs",
+    "llms.txt",
+    "LICENSE.txt",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "torture": "node --expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc test/torture.mjs",
+    "parity:r1": "node --expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc test/parity-r1.mjs",
+    "verify": "npm test && npm run torture",
+    "prepublishOnly": "npm test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@zakkster/lite-gc-profiler": "^1.16.0",
+    "@zakkster/lite-leak": "^1.10.0"
+  }
+}

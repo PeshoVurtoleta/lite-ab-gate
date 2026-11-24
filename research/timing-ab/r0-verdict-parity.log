@@ -1,0 +1,137 @@
+ok   P0 ab-gate.mjs sha256 7e0f9262 (pin 7e0f9262)
+ok   P0 fixture ubuntu sha256 c7bdc7bf
+ok   P0 fixture macos sha256 569b7d18
+ok   P0 lane-id generator matches ab-gate size constants
+ok   P0 lane ids (23) equal the ubuntu fixture RESULT order
+ok   P1 F1 ubuntu verbatim mutation applies
+ok   P2 F1 ubuntu verbatim: original exit 0 (want 0) VERDICT PASS gated=13/13 clean, every word as expected | cpu AMD EPYC 
+ok   P1 F2 macos verbatim (VOIDs on REPORTED lanes only) mutation applies
+ok   P2 F2 macos verbatim (VOIDs on REPORTED lanes only): original exit 0 (want 0) VERDICT PASS gated=13/13 clean, every word as expected | cpu Apple M1 
+ok   P1 F3 gated ro:16 rewritten consistently to SLOWER mutation applies
+ok   P2 F3 gated ro:16 rewritten consistently to SLOWER: original exit 3 (want 3) VERDICT FINDING wrong-gated=[ro:16 SLOWER 1.338[1.338..1.339] expected
+ok   P1 F4 gated uni:4096 VOID=[AA-DRIFT], aa out of band mutation applies
+ok   P2 F4 gated uni:4096 VOID=[AA-DRIFT], aa out of band: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 VOID(AA-
+ok   P1 F5 macos gated fw:16 RESULT line deleted mutation applies
+ok   P2 F5 macos gated fw:16 RESULT line deleted: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[no RESULT for 1 lane(s) fw:16] g
+ok   P1 F6 F3 + F4: FINDING wins (AB-G1) mutation applies
+ok   P2 F6 F3 + F4: FINDING wins (AB-G1): original exit 3 (want 3) VERDICT FINDING wrong-gated=[ro:16 SLOWER 1.338[1.338..1.339] expected
+ok   P1 F7 gated walk:4096:1 word changed, numbers kept mutation applies
+ok   P2 F7 gated walk:4096:1 word changed, numbers kept: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[walk:4096:1 print
+ok   P1 F8 gated fw:128 aa out of band, no VOID tag mutation applies
+ok   P2 F8 gated fw:128 aa out of band, no VOID tag: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[fw:128 aa 1.080[1
+ok   P1 F9 STOP line appended mutation applies
+ok   P2 F9 STOP line appended: original exit 2 (want 2) VERDICT NO VERDICT (STOP HARNESS) shape=[STOP HARNESS] gated-clean=13/
+ok   P1 F10 HEADER K=7 mutation applies
+ok   P2 F10 HEADER K=7: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[K=7 (want 11)] gated-clean=13/13
+ok   P1 F11 REPORTED walk:256:32 word flipped mutation applies
+ok   P2 F11 REPORTED walk:256:32 word flipped: original exit 0 (want 0) VERDICT PASS gated=13/13 clean, every word as expected | cpu AMD EPYC 
+ok   P1 F12 HEADER C=2 mutation applies
+ok   P2 F12 HEADER C=2: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[C=2 (want 3)] gated-clean=13/13 
+ok   P1 F13 HEADER inject=aa-drift mutation applies
+ok   P2 F13 HEADER inject=aa-drift: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[inject=aa-drift (want null)] gat
+ok   P1 F14 HEADER rung=AB2 mutation applies
+ok   P2 F14 HEADER rung=AB2: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[rung=AB2 (want ALL)] gated-clean
+ok   P1 F15 PROV end line deleted mutation applies
+ok   P2 F15 PROV end line deleted: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[0 PROV end lines (want 1)] gated
+ok   P1 F16 CRASH line appended mutation applies
+ok   P2 F16 CRASH line appended: original exit 2 (want 2) VERDICT NO VERDICT (CRASH) shape=[CRASH] gated-clean=13/13 | cpu AMD E
+ok   P1 F17 REPORTED walk:256:32 RESULT line twice mutation applies
+ok   P2 F17 REPORTED walk:256:32 RESULT line twice: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[several RESULT lines for walk:25
+ok   P1 F18 VOID line for gated ro:256, no tag mutation applies
+ok   P2 F18 VOID line for gated ro:256, no tag: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[ro:256 VOID-line(
+ok   P1 F19 gated fw:16 slow median 1.200 mutation applies
+ok   P2 F19 gated fw:16 slow median 1.200: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[fw:16 slow 1.200[
+ok   P1 F20 gated fw:16 slow q1 1.050 (median kept) mutation applies
+ok   P2 F20 gated fw:16 slow q1 1.050 (median kept): original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[fw:16 slow 3.023[
+ok   P1 F21 gated uni:256 bop column A missing mutation applies
+ok   P2 F21 gated uni:256 bop column A missing: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop SLOW:
+ok   P1 F22 gated uni:256 bop B 0.0200 mutation applies
+ok   P2 F22 gated uni:256 bop B 0.0200: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop SLOW:
+ok   P1 F23 gated uni:256 B/A q3 NaN (word unchanged) mutation applies
+ok   P2 F23 gated uni:256 B/A q3 NaN (word unchanged): original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 B/A not f
+ok   P1 F24 HEADER rung= line twice mutation applies
+ok   P2 F24 HEADER rung= line twice: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[2 HEADER rung= lines (want 1)] g
+ok   P1 F25 RESULT for an unknown lane mutation applies
+ok   P2 F25 RESULT for an unknown lane: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[RESULT for unknown lane(s) walk:
+ok   P1 F26 gated ro:4096 VOID=[NOT-TF] tag only mutation applies
+ok   P2 F26 gated ro:4096 VOID=[NOT-TF] tag only: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[ro:4096 VOID(NOT-
+ok   P1 F27 gated ro:16 wrong word but VOID: never a FINDING mutation applies
+ok   P2 F27 gated ro:16 wrong word but VOID: never a FINDING: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[ro:16 VOID(NOT-TF
+ok   P1 F28 STOP + a clean wrong gated word: NO VERDICT lists it mutation applies
+ok   P2 F28 STOP + a clean wrong gated word: NO VERDICT lists it: original exit 2 (want 2) VERDICT NO VERDICT (STOP HARNESS) shape=[STOP HARNESS] wrong-gated=[ro
+ok   P1 F29 HEADER not TIMED mutation applies
+ok   P2 F29 HEADER not TIMED: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[not TIMED] gated-clean=13/13 | c
+ok   P1 F30 HEADER unparsed mutation applies
+ok   P2 F30 HEADER unparsed: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[HEADER rung= line unparsed] gate
+ok   P1 F31 gated uni:256 bop column A twice, SLOW absent mutation applies
+ok   P2 F31 gated uni:256 bop column A twice, SLOW absent: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop A:0.0
+ok   P1 F32 gated uni:256 bop unknown column TF mutation applies
+ok   P2 F32 gated uni:256 bop unknown column TF: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop TF:0.
+ok   P1 F33 gated uni:256 bop malformed cell mutation applies
+ok   P2 F33 gated uni:256 bop malformed cell: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop SLOW:
+ok   P1 F34 gated ro:16 word= field twice mutation applies
+ok   P2 F34 gated ro:16 word= field twice: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[ro:16 printed wor
+ok   P1 F35 PROV end line twice mutation applies
+ok   P2 F35 PROV end line twice: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[2 PROV end lines (want 1)] gated
+ok   P1 F36 gated uni:256 bop A empty (null is not zero) mutation applies
+ok   P2 F36 gated uni:256 bop A empty (null is not zero): original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop SLOW:
+ok   P1 F37 gated uni:256 bop B -0.0001 (just below the 0 floor) mutation applies
+ok   P2 F37 gated uni:256 bop B -0.0001 (just below the 0 floor): original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop B:-0.
+ok   P1 F38 gated uni:4096 aa q1 NaN (median kept) mutation applies
+ok   P2 F38 gated uni:4096 aa q1 NaN (median kept): original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 aa 1.001
+ok   P1 F39 gated uni:4096 aa q3 NaN (median kept) mutation applies
+ok   P2 F39 gated uni:4096 aa q3 NaN (median kept): original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 aa 1.001
+ok   P1 F40 gated uni:4096 slow q3 NaN (median, q1 kept) mutation applies
+ok   P2 F40 gated uni:4096 slow q3 NaN (median, q1 kept): original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 slow 5.8
+ok   P1 F41 HEADER NQ2=1 mutation applies
+ok   P2 F41 HEADER NQ2=1: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[NQ2=1 (want 524288)] gated-clean
+ok   P1 F42 HEADER minWindow=1 mutation applies
+ok   P2 F42 HEADER minWindow=1: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[minWindow=1 (want 131072)] gated
+ok   P1 F43 PROV start line deleted mutation applies
+ok   P2 F43 PROV start line deleted: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[0 PROV start lines (want 1)] gat
+ok   P1 F44 PROV start line twice mutation applies
+ok   P2 F44 PROV start line twice: original exit 2 (want 2) VERDICT NO VERDICT (run shape) shape=[2 PROV start lines (want 1)] gat
+ok   P1 F45 gated uni:4096 aa q1 Infinity (310-digit numeral) mutation applies
+ok   P2 F45 gated uni:4096 aa q1 Infinity (310-digit numeral): original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 aa 1.001
+ok   P1 rows built 45 / 45 (want 45: F1-F45)
+ok   R0 PARITY verdict + REPORTED line + code byte-identical on 45 / 45 rows
+ok   P3 control "gated ro:16 expected word flipped to SLOWER" differs on 43 row(s): F1,F2,F3,F4,F5,F6,F7,F8,..
+ok   P3 control "HEADER shape field minWindow dropped" differs on 43 row(s): F1,F2,F3,F4,F5,F6,F7,F8,..
+ok   P3 control "A/A band widened to [0.90, 1.10]" differs on 45 row(s): F1,F2,F3,F4,F5,F6,F7,F8,..
+ok   P5 B1 gated uni:4096 aa median exactly 0.950 mutation applies
+ok   P5 B1 gated uni:4096 aa median exactly 0.950: original exit 0 (want 0) VERDICT PASS gated=13/13 clean, every word as expected | cpu AMD EPYC 9V45 96-Core Process
+ok   P5 B2 gated uni:4096 aa median exactly 1.050 mutation applies
+ok   P5 B2 gated uni:4096 aa median exactly 1.050: original exit 0 (want 0) VERDICT PASS gated=13/13 clean, every word as expected | cpu AMD EPYC 9V45 96-Core Process
+ok   P5 B3 gated fw:16 slow median exactly 1.250 mutation applies
+ok   P5 B3 gated fw:16 slow median exactly 1.250: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[fw:16 slow 1.250[1.200..1.300] not me
+ok   P5 B4 gated fw:16 slow q1 exactly 1.100 mutation applies
+ok   P5 B4 gated fw:16 slow q1 exactly 1.100: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[fw:16 slow 3.023[1.100..3.026] not me
+ok   P5 B5 gated uni:256 bop B exactly 1/64 mutation applies
+ok   P5 B5 gated uni:256 bop B exactly 1/64: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 bop SLOW:0.0000,AA:0.0000,B:0
+ok   P5 B6 gated ro:16 B/A median exactly 1.050, WITHIN mutation applies
+ok   P5 B6 gated ro:16 B/A median exactly 1.050, WITHIN: original exit 3 (want 3) VERDICT FINDING wrong-gated=[ro:16 WITHIN 1.050[1.040..1.060] expected FASTER] gated-clean
+ok   P5 B7 gated ro:16 B/A q1 exactly 1.000, WITHIN mutation applies
+ok   P5 B7 gated ro:16 B/A q1 exactly 1.000, WITHIN: original exit 3 (want 3) VERDICT FINDING wrong-gated=[ro:16 WITHIN 1.100[1.000..1.200] expected FASTER] gated-clean
+ok   P5 B8 gated ro:16 B/A median exactly 0.950, WITHIN mutation applies
+ok   P5 B8 gated ro:16 B/A median exactly 0.950, WITHIN: original exit 3 (want 3) VERDICT FINDING wrong-gated=[ro:16 WITHIN 0.950[0.940..0.960] expected FASTER] gated-clean
+ok   P5 B9 gated ro:16 B/A q3 exactly 1.000, WITHIN mutation applies
+ok   P5 B9 gated ro:16 B/A q3 exactly 1.000, WITHIN: original exit 3 (want 3) VERDICT FINDING wrong-gated=[ro:16 WITHIN 0.900[0.800..1.000] expected FASTER] gated-clean
+ok   P5 B10 gated uni:4096 aa q1 literal Infinity mutation applies
+ok   P5 B10 gated uni:4096 aa q1 literal Infinity: original exit 2 (want 2) VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:4096 aa 1.001[NaN..1.003] not fin
+ok   P5 PARITY on boundary rows 10 / 10
+ok   P5 control flip wordMedHi differs on 1 boundary row(s) B6 (F-rows differing: 0)
+ok   P5 control flip wordQ1 differs on 1 boundary row(s) B7 (F-rows differing: 0)
+ok   P5 control flip wordMedLo differs on 1 boundary row(s) B8 (F-rows differing: 0)
+ok   P5 control flip wordQ3 differs on 1 boundary row(s) B9 (F-rows differing: 0)
+ok   P5 control flip aaBand differs on 2 boundary row(s) B1,B2 (F-rows differing: 0)
+ok   P5 control flip slowMed differs on 1 boundary row(s) B3 (F-rows differing: 0)
+ok   P5 control flip slowQ1 differs on 1 boundary row(s) B4 (F-rows differing: 0)
+ok   P5 control flip bopMax differs on 1 boundary row(s) B5 (F-rows differing: 0)
+ok   P5 control flip bopZero differs on 10 boundary row(s) B1,B2,B3,B4,B5,B6,B7,B8,B9,B10 (F-rows differing: 45)
+ok   P5 control flip numInf differs on 1 boundary row(s) B10 (F-rows differing: 0)
+ok   P6 default spec after the flip loop: 45 / 45 F-rows, 10 / 10 B-rows
+ok   P4 synthetic PASS: code 0 VERDICT PASS gated=2/2 clean, every word as expected | cpu Synthetic CPU | arch 
+ok   P4 synthetic FINDING: code 3 VERDICT FINDING wrong-gated=[x:a WITHIN 1.000[0.990..1.010] expected FASTER] gat
+ok   P4 synthetic NO VERDICT (A/A): code 2 VERDICT NO VERDICT (gated lane not clean) not-clean=[x:b aa 1.080[1.070..1.090] 
+ok   P4 synthetic spec names no LiteBisect lane or field
+R0-PARITY all ok | ab-gate 7e0f9262 | node v26.8.2 | 2026-11-23T08:54:02.120Z

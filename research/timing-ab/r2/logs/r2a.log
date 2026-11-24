@@ -1,0 +1,79 @@
+INPUT LiteBisect /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteBisect (read only)
+INPUT P1-ubuntu REF rejudge/run-43145179770/ab-gate-ubuntu-latest/gate.log sha256/8 6035afb2 lanes=23 cpu AMD EPYC 9V74 80-Core Processor | PROV start 2026-11-12T03:00:44.734Z load 1.02 0.33 0.12 | PROV end 2026-11-12T03:02:51.264Z load 1.13 0.62 0.25 | printed VERDICT PASS gated=13/13 clean, every word as expected | cpu AMD EPYC 9V74 80-Core Processor | arch x64 | node v26.8.2
+INPUT P1-macos REF rejudge/run-43145179770/ab-gate-macos-latest/gate.log sha256/8 d6cc3927 lanes=23 cpu Apple M1 (Virtual) | PROV start 2026-11-12T03:00:46.216Z load 24.11 17.69 7.77 | PROV end 2026-11-12T03:02:55.352Z load 6.46 13.80 7.64 | printed VERDICT PASS gated=13/13 clean, every word as expected | cpu Apple M1 (Virtual) | arch arm64 | node v26.8.2
+INPUT P2-ubuntu REF audit-neon/ab/run-45079558712.log sha256/8 5ee455d5 lanes=23 cpu AMD EPYC 7763 64-Core Processor | PROV start 2026-11-22T22:47:02.969Z load 1.02 0.59 0.24 | PROV end 2026-11-22T22:49:08.304Z load 1.19 0.78 0.36 | printed VERDICT PASS gated=13/13 clean, every word as expected | cpu AMD EPYC 7763 64-Core Processor | arch x64 | node v26.8.2
+INPUT V1-ubuntu TARGET rejudge/run-45087568692.joblog sha256/8 98d19326 lanes=23 cpu AMD EPYC 7763 64-Core Processor | PROV start 2026-11-23T00:14:57.416Z load 1.85 0.66 0.24 | PROV end 2026-11-23T00:17:02.669Z load 1.09 0.78 0.34 | printed VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:65536 VOID(AA-DRIFT) + VOID-line(AA-DRIFT) + aa 0.941[0.926..0.951] not in [0.95, 1.05]] gated-clean=12/13 | cpu AMD EPYC 7763 64-Core Processor | arch x64 | node v26.8.2
+INPUT V1-macos TARGET rejudge/run-45087568692.joblog sha256/8 98d19326 lanes=23 cpu Apple M1 (Virtual) | PROV start 2026-11-23T00:15:45.510Z load 58.98 49.32 22.01 | PROV end 2026-11-23T00:18:34.187Z load 11.32 32.34 19.94 | printed VERDICT NO VERDICT (gated lane not clean) not-clean=[uni:256 VOID(AA-DRIFT) + VOID-line(AA-DRIFT) + aa 1.051[0.762..1.133] not in [0.95, 1.05], walk:65536:1 VOID(AA-DRIFT) + VOID-line(AA-DRIFT) + aa 0.945[0.807..1.064] not in [0.95, 1.05], walk:65536:4 VOID(AA-DRIFT) + VOID-line(AA-DRIFT) + aa 1.099[0.953..1.218] not in [0.95, 1.05], ro:65536 VOID(AA-DRIFT) + VOID-line(AA-DRIFT) + aa 0.913[0.906..1.005] not in [0.95, 1.05]] gated-clean=9/13 | cpu Apple M1 (Virtual) | arch arm64 | node v26.8.2
+INPUT L1-ubuntu REF research/ab/logs/r4-43127032794/ab-r4-ubuntu-latest/rung-all.log sha256/8 c7bdc7bf lanes=23 cpu AMD EPYC 9V45 96-Core Processor | PROV start 2026-11-12T00:24:51.634Z load 0.60 0.18 0.06 | PROV end 2026-11-12T00:26:25.047Z load 1.01 0.43 0.17
+INPUT L1-macos REF research/ab/logs/r4-43127032794/ab-r4-macos-latest/rung-all.log sha256/8 569b7d18 lanes=23 cpu Apple M1 (Virtual) | PROV start 2026-11-12T00:27:41.725Z load 9.10 15.58 13.85 | PROV end 2026-11-12T00:30:03.600Z load 2.79 10.96 12.28
+M0 P1-ubuntu -> PASS
+M0 P1-macos -> PASS
+M0 P2-ubuntu -> PASS
+M0 V1-ubuntu -> NO VERDICT (gated lane not clean, 12/13 clean)
+M0 V1-macos -> NO VERDICT (gated lane not clean, 9/13 clean)
+M0 L1-ubuntu verdict: not printed in lab format (M0 recomputed only)
+M0 L1-ubuntu -> PASS
+M0 L1-macos verdict: not printed in lab format (M0 recomputed only)
+M0 L1-macos -> PASS
+SELFCHECK lanes=161 RAW->RESULT checked; bent-RAW control caught 89/161 lanes; fails=0
+
+DESC per leg: AA/A over all lanes (per-lane IQR width median, per-lane aa med range, rounds outside [0.95, 1.05] / total)
+DESC P1-ubuntu iqrW med 0.0034 max 0.0093 | aa med 0.996..1.018 | rounds out 1/253 (round 0 out on 0 lanes)
+DESC P1-macos iqrW med 0.0139 max 0.0966 | aa med 0.974..1.014 | rounds out 28/253 (round 0 out on 2 lanes)
+DESC P2-ubuntu iqrW med 0.0033 max 0.0121 | aa med 0.976..1.021 | rounds out 0/253 (round 0 out on 0 lanes)
+DESC V1-ubuntu iqrW med 0.0037 max 0.0248 | aa med 0.941..1.004 | rounds out 8/253 (round 0 out on 1 lanes)
+DESC V1-macos iqrW med 0.1734 max 0.3779 | aa med 0.913..1.099 | rounds out 161/253 (round 0 out on 14 lanes)
+DESC L1-ubuntu iqrW med 0.0028 max 0.0112 | aa med 0.988..1.006 | rounds out 1/253 (round 0 out on 0 lanes)
+DESC L1-macos iqrW med 0.0562 max 0.3077 | aa med 0.986..1.075 | rounds out 97/253 (round 0 out on 8 lanes)
+
+DESC V1 VOID lanes, gated and reported (INTAKE H1 / H2: any lane; order = position in the run, AA/A per round):
+DESC V1-ubuntu uni:65536 order 10/23 aa 0.941[0.926..0.951] gated spread AA=0.944,0.953,0.928,0.952,0.941,0.925,0.917,0.922,0.926,0.950,0.952
+DESC V1-macos uni:256 order 0/23 aa 1.051[0.762..1.133] gated spread AA=1.051,0.708,1.091,1.245,0.849,1.084,0.660,0.742,1.183,1.174,0.782
+DESC V1-macos walk:256:32 order 3/23 aa 0.927[0.881..1.057] reported spread AA=0.895,1.202,0.927,0.464,1.140,0.868,1.060,0.922,1.053,1.022,0.683
+DESC V1-macos walk:256:64 order 4/23 aa 1.056[0.931..1.118] reported spread AA=0.982,0.640,0.973,1.380,1.056,1.085,0.566,1.357,0.889,1.151,1.070
+DESC V1-macos walk:65536:1 order 11/23 aa 0.945[0.807..1.064] gated spread AA=0.767,0.846,0.945,0.873,0.997,0.666,1.146,1.207,0.547,1.032,1.095
+DESC V1-macos walk:65536:4 order 12/23 aa 1.099[0.954..1.218] gated spread AA=0.987,1.572,0.891,0.920,0.836,1.169,1.234,1.079,1.099,1.472,1.201
+DESC V1-macos walk:65536:64 order 13/23 aa 0.936[0.881..1.055] reported spread AA=0.828,0.936,1.073,0.826,1.049,1.060,0.892,0.958,0.871,1.486,0.898
+DESC V1-macos ro:65536 order 18/23 aa 0.913[0.906..1.005] gated spread AA=1.052,0.866,0.911,1.638,0.919,1.350,0.902,0.958,0.392,0.910,0.913
+
+H1 level shift: 0 / 8 V1 VOID lanes have AA q1..q3 entirely outside the band -> FAILS
+H2 boot decay: V1-macos VOID lanes at order 0,3,4,11,12,13,18 of 23 (first half: 4 / 7) -> FAILS
+H3 hosted spread: per-lane AA IQR width median hosted 0.0059 (161 lanes, 7 legs) vs R1 local QUIET hold 0.0081 (15 lanes) = 0.72x -> FAILS
+H3 leg P1-ubuntu iqrW median 0.0034 = 0.43x R1
+H3 leg P1-macos iqrW median 0.0139 = 1.72x R1
+H3 leg P2-ubuntu iqrW median 0.0033 = 0.41x R1
+H3 leg V1-ubuntu iqrW median 0.0037 = 0.46x R1
+H3 leg V1-macos iqrW median 0.1734 = 21.41x R1
+H3 leg L1-ubuntu iqrW median 0.0028 = 0.35x R1
+H3 leg L1-macos iqrW median 0.0562 = 6.94x R1
+
+MECH MW rescue: V1-ubuntu NO VERDICT (gated lane not clean, 12/13 clean) | V1-macos NO VERDICT (gated lane not clean, 10/13 clean) -> (a) NO
+MECH MW W1 0
+MECH MW W2 n/a (0 lanes M0 voids for SLOW-DEAD on any leg; untestable on these logs)
+MECH MW W3 2 of 365 injected lanes (all lanes, REF legs) M0 voids: L1-macos uni:256 x0.94; L1-macos fw:16 x0.94
+MECH MW V1-ubuntu uni:65536 -> VOID(AA-DRIFT) kept 10 aa 0.935[0.926..0.951] B/A 2.014[2.008..2.024]
+MECH MW V1-macos uni:256 -> clean SLOWER (= GATED) kept 10 aa 0.966[0.752..1.153] B/A 2.179[2.008..2.711]
+MECH MW V1-macos walk:65536:1 -> clean FASTER (= GATED) kept 10 aa 0.971[0.853..1.079] B/A 0.333[0.301..0.365]
+MECH MW V1-macos walk:65536:4 -> VOID(AA-DRIFT) kept 10 aa 1.134[0.960..1.226] B/A 0.541[0.530..0.567]
+MECH MW V1-macos ro:65536 -> VOID(AA-DRIFT) kept 10 aa 0.912[0.904..0.948] B/A 0.573[0.563..0.713]
+MECH MT rescue: V1-ubuntu NO VERDICT (gated lane not clean, 12/13 clean) | V1-macos NO VERDICT (gated lane not clean, 1/13 clean) -> (a) NO
+MECH MT W1 9: L1-macos uni:256 clean/SLOWER -> VOID(TRIM-SHORT(4))/SLOWER; L1-macos walk:256:4 clean/SLOWER -> VOID(TRIM-SHORT(3))/SLOWER; L1-macos uni:65536 clean/SLOWER -> VOID(TRIM-SHORT(5))/SLOWER; L1-macos walk:65536:1 clean/FASTER -> VOID(TRIM-SHORT(7))/FASTER; L1-macos walk:65536:4 clean/FASTER -> VOID(TRIM-SHORT(4))/FASTER; L1-macos ro:16 clean/FASTER -> VOID(TRIM-SHORT(4))/FASTER; L1-macos ro:256 clean/FASTER -> VOID(TRIM-SHORT(7))/FASTER; L1-macos fw:16 clean/SLOWER -> VOID(TRIM-SHORT(6))/SLOWER; ...
+MECH MT W2 n/a (0 lanes M0 voids for SLOW-DEAD on any leg; untestable on these logs)
+MECH MT W3 0 of 365 injected lanes (all lanes, REF legs) M0 voids
+MECH MT V1-ubuntu uni:65536 -> VOID(TRIM-SHORT(3)) kept 3 aa 0.952[0.952..0.952] B/A 2.015[2.014..2.033]
+MECH MT V1-macos uni:256 -> VOID(TRIM-SHORT(0),AA-DRIFT,SLOW-DEAD) kept 0 aa NaN[NaN..NaN] B/A NaN[NaN..NaN]
+MECH MT V1-macos walk:65536:1 -> VOID(TRIM-SHORT(2)) kept 2 aa 1.015[1.006..1.024] B/A 0.392[0.387..0.397]
+MECH MT V1-macos walk:65536:4 -> VOID(TRIM-SHORT(1)) kept 1 aa 0.987[0.987..0.987] B/A 0.612[0.612..0.612]
+MECH MT V1-macos ro:65536 -> VOID(TRIM-SHORT(1)) kept 1 aa 0.958[0.958..0.958] B/A 0.581[0.581..0.581]
+MECH MJ rescue: V1-ubuntu PASS | V1-macos PASS -> (a) YES
+MECH MJ W1 0
+MECH MJ W2 n/a (0 lanes M0 voids for SLOW-DEAD on any leg; untestable on these logs)
+MECH MJ W3 345 of 365 injected lanes (all lanes, REF legs) M0 voids: P1-ubuntu uni:256 x0.9; P1-ubuntu uni:256 x0.94; P1-ubuntu uni:256 x1.06; P1-ubuntu uni:256 x1.1; P1-ubuntu walk:256:1 x0.9; P1-ubuntu walk:256:1 x0.94; P1-ubuntu walk:256:1 x1.06; P1-ubuntu walk:256:1 x1.1; P1-ubuntu walk:256:4 x0.9; P1-ubuntu walk:256:4 x0.94; ...
+MECH MJ V1-ubuntu uni:65536 -> clean SLOWER (= GATED) kept 11 aa 0.941[0.926..0.951] B/A 2.015[2.009..2.025]
+MECH MJ V1-macos uni:256 -> clean SLOWER (= GATED) kept 11 aa 1.051[0.762..1.133] B/A 2.226[2.017..2.766]
+MECH MJ V1-macos walk:65536:1 -> clean FASTER (= GATED) kept 11 aa 0.945[0.807..1.064] B/A 0.332[0.305..0.360]
+MECH MJ V1-macos walk:65536:4 -> clean FASTER (= GATED) kept 11 aa 1.099[0.954..1.218] B/A 0.544[0.531..0.574]
+MECH MJ V1-macos ro:65536 -> clean FASTER (= GATED) kept 11 aa 0.913[0.906..1.005] B/A 0.565[0.524..0.704]
+M1 re-pair (untestable offline): VOID gated lanes to rescue V1-ubuntu 1, V1-macos 4
+KILL RULE R2a: FIRED -- no offline mechanism rescues both V1 legs without weakening (W2 untestable: no SLOW-DEAD lane in the inputs)
+DESIGN QUESTION: MJ rescue with W3 only (W2 untestable) (margin-aware A/A; re-rules law 5 / A8, not adopted here)

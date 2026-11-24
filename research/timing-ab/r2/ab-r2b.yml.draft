@@ -1,0 +1,161 @@
+# ab-r2b.yml -- DRAFT (timing-ab research R2b; R2B-DESIGN.md section 4). NOT a live workflow: it lives in a gitignored
+# research dir and is used only if the maintainer copies it into a pushed repo (Q-R2B-HOME) and dispatches it.
+# Shape copied from LiteBisect .github/workflows/ab.yml (read only); differences are marked "R2b:".
+# STATISTICAL research run: dispatch-only, never scheduled, never a required check.
+#   gh workflow run ab-r2b.yml --ref main
+# Exit per job = the prototype's verdict code: 0 PASS | 3 FINDING | 2 NO VERDICT | 1 STOP / CRASH.
+# Logs: one artifact per job (r2b-<os>-leg<n>: provenance.log, selftest.log, gate.log, rejudge.log, exit-code.txt).
+# The prototype imports only node: builtins: no npm ci.
+
+name: ab-r2b
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # R2b: the copied research files (R2B-DESIGN.md section 5 step 2)
+  GATE: research/timing-ab/ab-proto-r2b.mjs
+  LANES: research/timing-ab/ohlc-lane-r2b.mjs
+
+jobs:
+  ab:
+    name: r2b (${{ matrix.os }}, leg ${{ matrix.leg }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # R2b: include-only (as ab.yml); the leg key is OPTIONAL (Q-R2B-LEGS). Option (a): legs 1..3 per OS in one
+        # dispatch (6 jobs) + one later dispatch; option (b): drop the leg-2/3 entries and dispatch 3 times.
+        include:
+          - { os: ubuntu-latest, arch: X64, nodearch: x64, node: '26.8.2', leg: 1 }
+          - { os: ubuntu-latest, arch: X64, nodearch: x64, node: '26.8.2', leg: 2 }
+          - { os: ubuntu-latest, arch: X64, nodearch: x64, node: '26.8.2', leg: 3 }
+          - { os: macos-latest, arch: ARM64, nodearch: arm64, node: '26.8.2', leg: 1 }
+          - { os: macos-latest, arch: ARM64, nodearch: arm64, node: '26.8.2', leg: 2 }
+          - { os: macos-latest, arch: ARM64, nodearch: arm64, node: '26.8.2', leg: 3 }
+    env:
+      # exactly the prototype's REQUIRED_FLAGS (= ab-gate's); expanded UNQUOTED on purpose (one argv entry per flag)
+      FLAGS: --expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc
+    steps:
+      - name: runner identity
+        env:
+          WANT_OS: ${{ matrix.os }}
+          WANT_ARCH: ${{ matrix.arch }}
+        run: |
+          : "${ImageOS:?unset}"
+          test "$RUNNER_ARCH" = "$WANT_ARCH"
+          case "$WANT_OS" in
+            ubuntu-latest) test "$RUNNER_OS" = Linux ;;
+            macos-latest) test "$RUNNER_OS" = macOS ;;
+            *) echo "unexpected matrix os: $WANT_OS"; exit 1 ;;
+          esac
+      - name: checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: setup node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          architecture: ${{ matrix.nodearch }}
+      - name: node is exactly the pin
+        env:
+          PIN: ${{ matrix.node }}
+          WANT_NODEARCH: ${{ matrix.nodearch }}
+        run: |
+          test "$PIN" = 26.8.2
+          test "$(node --version)" = "v$PIN"
+          test "$(node -p process.arch)" = "$WANT_NODEARCH"
+      - name: provenance
+        run: |
+          mkdir -p logs
+          echo 'none (gate not run)' > logs/exit-code.txt
+          {
+            echo "date -u: $(date -u)"
+            echo "runner image: $ImageOS $ImageVersion"
+            echo "runner: $RUNNER_OS / $RUNNER_ARCH"
+            echo "files: $(shasum -a 256 "$GATE" "$LANES" research/timing-ab/frozen/Ohlc.js research/timing-ab/frozen/baseline.mjs)"
+            uname -a
+            uptime
+            node -v
+            node -p "process.arch + ' ' + process.versions.v8"
+            case "$RUNNER_OS" in
+              Linux)
+                lscpu
+                echo "nproc: $(nproc)"
+                # R2b: hypervisor steal is invisible to load1 (LiteBisect B19); the gate also prints it per lane
+                grep '^cpu ' /proc/stat
+                vmstat 1 5 || true
+                ;;
+              macOS)
+                echo "cpu: $(sysctl -n machdep.cpu.brand_string)"
+                sysctl hw.ncpu hw.cachelinesize hw.pagesize hw.l1dcachesize hw.l2cachesize
+                sysctl -n vm.loadavg
+                # R2b: no steal counter on macOS; vm_stat is informational only
+                vm_stat || true
+                ;;
+              *)
+                echo "unexpected RUNNER_OS: $RUNNER_OS"
+                exit 1
+                ;;
+            esac
+          } 2>&1 | tee logs/provenance.log
+      - name: selftest
+        run: |
+          node $FLAGS "$GATE" "$LANES" --selftest 2>&1 | tee logs/selftest.log
+          grep -qx 'SELFTEST all ok' logs/selftest.log
+      - name: gate (run ALL, repair 1)
+        run: |
+          set +e
+          node $FLAGS "$GATE" "$LANES" --run ALL --repair 1 2>&1 | tee logs/gate.log
+          st=("${PIPESTATUS[@]}")
+          set -e
+          echo "${st[0]}" > logs/exit-code.txt
+          test "${st[1]}" = 0
+          exit "${st[0]}"
+      # R2b: the untimed judge must read the same VERDICT line from the saved log as the live run printed
+      - name: re-judge the saved log
+        if: always()
+        run: |
+          test -f logs/gate.log
+          set +e
+          node "$GATE" "$LANES" --verdict-file logs/gate.log > logs/rejudge.log 2>&1
+          set -e
+          live="$(grep '^VERDICT ' logs/gate.log || echo 'none')"
+          again="$(grep '^VERDICT ' logs/rejudge.log || echo 'none')"
+          echo "live:  $live"
+          echo "again: $again"
+          test "$live" = "$again"
+      - name: verdict to the job summary
+        if: always()
+        env:
+          MOS: ${{ matrix.os }}
+          LEG: ${{ matrix.leg }}
+        run: |
+          {
+            echo "### r2b, $MOS leg $LEG (exit $(cat logs/exit-code.txt 2>/dev/null || echo 'none'))"
+            echo
+            echo '```'
+            if [ -f logs/gate.log ] && grep -q '^VERDICT ' logs/gate.log; then
+              grep '^VERDICT ' logs/gate.log
+            else
+              echo 'no VERDICT line: the gate did not run or did not finish (NO VERDICT)'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: upload logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: r2b-${{ matrix.os }}-leg${{ matrix.leg }}
+          path: logs/
+          retention-days: 30
+          if-no-files-found: error
