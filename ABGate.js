@@ -24,6 +24,9 @@
 // Exits (as ab-gate :59-64): 0 PASS | 3 FINDING | 2 NO VERDICT | 1 STOP (ORACLE, ANCHOR, CLI, FLAGS, CLASSIFIER, HARNESS)
 // or CRASH. `--oracle-only`: 0 = no VOID on a gated lane, 2 = a VOID on a gated lane. `--selftest`: 0 / 1.
 // VOID kinds per lane: SLOW-DEAD, AA-DRIFT, REPS-DRIFT, NOT-TF, ALLOC, GC-WINDOW, NAN, plus the lane's workFloor reason.
+// Rung E2 (C-23, Q-HOTLOOP (a)): the in-window loop is the TF-forced timedRounds (t0 / t1 in a Float64Array(2) slot),
+// armed once per timed run on 5 tool-owned dummy entries; not TF across a window = VOID NOT-TF (tool). Each timed lane
+// prints `WINDOW lane=<id> tool-bytes=<n> scavenges=<k>` (new-space bytes allocated in the window, net of the probe).
 // R1 fix round (law-11 review r1; maintainer rulings Q-REPS = (a), Q-WARM = (a)): a fifth column AB = A compiled fresh,
 // timed at B's reps when they differ from A's; Q-REPS-2 (re-ruled "judge both ratios"): word(B/AB) must equal word(B/A),
 // else VOID REPS-DRIFT; ab = AB / A is REPORTED, no band; equal reps print ab, B/AB, wordAB = n/a; K + 1 rounds per window with round 0 discarded from every column (printed on a WARM line); checkArr after every
@@ -85,6 +88,9 @@ const INJECTIONS = Object.freeze({   // ab-gate :142-151, the generic five
     'ab-drift': { want: 2, marker: 'VOID REPS-DRIFT', verdict: 'VERDICT NO VERDICT' },
     'warm-skew': { want: 2, marker: 'WARM lane=', absent: 'VOID AA-DRIFT', verdict: 'VERDICT NO VERDICT (run shape)', K: 1 },
     'arr-bend': { want: 1, marker: ' (after warm) differs from the lane data', verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
+    // E2 (C-23): timedRounds deoptimized and pinned out of TF INSIDE the window (TF at its start, not at its end) -> the
+    // window runs interpreted (WINDOW reads > 0 tool bytes) and the lane is VOID NOT-TF tool. Not in the selftest list.
+    'tool-deopt': { want: 2, marker: 'NOT-TF tool', verdict: 'VERDICT NO VERDICT' },
 });
 // untimed spec injection (selftest only): the lane file's gated map replaced by {} -> STOP HARNESS in loadSpec
 const SPEC_INJECT = 'empty-gated';
@@ -634,6 +640,79 @@ function oracleLane(ctx, L, cols, K) {
     return { lane: L.id, gated: isGated(ctx, L.id), voids, ops };
 }
 
+// ---------------------------------------------------------------- timedRounds (rung E2, C-23 Q-HOTLOOP (a))
+// ab-proto's in-window closure loop, hoisted verbatim except that t0 / t1 live in the T slots: in TF code a clock read
+// stored into a Float64Array never boxes (census (a): 0 B / call), where the closure (called once, never optimized)
+// boxed t0, t1 and the ns quotient (census (b): 224 B per entry per round). The e.run call site is armed megamorphic on
+// tool-owned dummies (never a lane kernel), so no lane kernel is inlined into the loop.
+const T = new Float64Array(2);
+function timedRounds(live, N, starts, KR, n, L, tfBad, WARM) {
+    for (let x = 0; x < KR; x++) {
+        const st = starts[x];
+        for (let y = 0; y < N; y++) {
+            const e = live[(y + x) % N];
+            T[0] = performance.now();
+            const got = e.run(e.state, st, n, e.reps);
+            T[1] = performance.now();
+            if (got !== e.wants[x]) verifyRun(e, got, e.wants[x], L, 'timed');
+            e.ns[x] = (T[1] - T[0]) * 1e6 / (n * e.reps);
+        }
+        if (x === 0) WARM[0] = 0;
+        for (let y = 0; y < N; y++) if ((optStatus(live[y].run) & TF_BIT) === 0) tfBad[y] = 1;
+    }
+}
+// The WINDOW probe: new-space bytes allocated while fn runs = the used-size delta across fn, plus the new-space bytes
+// every GC inside fn freed, minus the same delta across an empty read pair (the probe's own cost). Called around the
+// window, never between the clock reads. -> { bytes, scavenges }.
+const WIN = new Float64Array(4);
+const usedNew = (h) => { for (const s of h.heapSpaceStatistics) if (s.spaceName === 'new_space') return s.spaceUsedSize; return NaN; };
+function windowProbe(fn) {
+    WIN[0] = newSpaceUsed();
+    WIN[1] = newSpaceUsed();
+    const q = new GCProfiler();
+    q.start();
+    WIN[2] = newSpaceUsed();
+    try { fn(); } catch (e) { q.stop(); throw e; }   // a STOP inside the window never leaves this profiler running
+    WIN[3] = newSpaceUsed();
+    const st = q.stop().statistics;
+    let freed = 0, scavenges = 0;
+    for (const g of st) { if (!notMinor(g)) scavenges++; freed += usedNew(g.beforeGC) - usedNew(g.afterGC); }
+    if (WIN[0] < 0 || WIN[1] < 0 || WIN[2] < 0 || WIN[3] < 0) return { bytes: NaN, scavenges };   // unmeasured, never 0
+    return { bytes: (WIN[3] - WIN[2]) - (WIN[1] - WIN[0]) + freed, scavenges };
+}
+const ARM_N = 5, ARM_KR = 2, ARM_OPS = 8;
+/** Once per timed run: 5 tool-owned entries of the lane-entry shape (buildEntry's literal; state / data / one of
+ *  varied shapes, so every field type is already general), each with its own non-allocating run (fresh nonce: the
+ *  e.run site goes megamorphic), two dry runs, then forceOpt and a third. The probe is warmed on an empty window. */
+function armTimed(inject) {
+    const prep = new Function('f', '%PrepareFunctionForOptimization(f);');
+    const dummies = [];
+    for (let i = 0; i < ARM_N; i++) {
+        const f = new Function('"use strict"; // ab-gate tool-arm #' + (NONCE++) + '\nreturn { run: function run(st, start, n, reps) { ' +
+            'let a = ' + i + '; for (let p = 0; p < reps; p++) for (let j = start; j < start + n; j++) a = (a + st.x[j & 7]) | 0; return a; }, ' +
+            'one: function one(st, op) { return st.x[op & 7]; } };')();
+        const x = new Int32Array(ARM_OPS);
+        for (let j = 0; j < ARM_OPS; j++) x[j] = (i + 1) * (j + 3);
+        const data = i === 0 ? { x } : i === 1 ? { x, n: ARM_OPS } : i === 2 ? { n: ARM_OPS, x } : i === 3 ? { x, s: 'tool' } : { x, n: ARM_OPS, k: 0 };
+        const state = i === 0 ? { x } : i === 1 ? { x, out: new Float64Array(2) } : i === 2 ? { out: null, x } : i === 3 ? { x, a: 0, b: 'tool' } : data;
+        const e = { col: 'TOOL' + i, copy: i, run: f.run, one: f.one, state, data, ns: null, reps: 1, wants: null };
+        e.ns = new Float64Array(ARM_KR);
+        e.reps = i + 1;
+        e.wants = new Int32Array(ARM_KR);
+        dummies.push(e);
+    }
+    const starts = new Int32Array(ARM_KR), tfBad = new Uint8Array(ARM_N), warm = new Int32Array(1);
+    for (let x = 0; x < ARM_KR; x++) starts[x] = x;
+    for (const e of dummies) for (let x = 0; x < ARM_KR; x++) e.wants[x] = e.run(e.state, starts[x], ARM_OPS >>> 1, e.reps);
+    const L = { id: 'tool-arm' };
+    prep(timedRounds);
+    timedRounds(dummies, ARM_N, starts, ARM_KR, ARM_OPS >>> 1, L, tfBad, warm);
+    timedRounds(dummies, ARM_N, starts, ARM_KR, ARM_OPS >>> 1, L, tfBad, warm);
+    forceOpt(timedRounds);
+    timedRounds(dummies, ARM_N, starts, ARM_KR, ARM_OPS >>> 1, L, tfBad, warm);
+    for (let i = 0; i < 4; i++) windowProbe(() => {});
+}
+
 // ---------------------------------------------------------------- timed lane (ab-gate :727-815)
 async function runLane(ctx, L, cols, K, inject) {
     const entries = buildEntries(L, cols, ctx.jspec.C);
@@ -677,21 +756,12 @@ async function runLane(ctx, L, cols, K, inject) {
     const LATE = globalThis.__labLate, WARM = globalThis.__labWarm;
     LATE[0] = inject === 'late-bend' ? 1 : 0;
     WARM[0] = inject === 'warm-skew' ? 1 : 0;
-    const w = await gcWindow(() => {
-        for (let x = 0; x < KR; x++) {
-            const st = starts[x];
-            for (let y = 0; y < N; y++) {
-                const e = live[(y + x) % N];
-                const t0 = performance.now();
-                const got = e.run(e.state, st, n, e.reps);
-                const t1 = performance.now();
-                if (got !== e.wants[x]) verifyRun(e, got, e.wants[x], L, 'timed');
-                e.ns[x] = (t1 - t0) * 1e6 / (n * e.reps);
-            }
-            if (x === 0) WARM[0] = 0;
-            for (let y = 0; y < N; y++) if ((optStatus(live[y].run) & TF_BIT) === 0) tfBad[y] = 1;
-        }
-    });
+    const toolTfStart = (optStatus(timedRounds) & TF_BIT) !== 0;
+    let win = null;
+    const toolDeopt = inject === 'tool-deopt' ? new Function('f', '%DeoptimizeFunction(f); %NeverOptimizeFunction(f);') : null;
+    const w = await gcWindow(() => { win = windowProbe(() => { if (toolDeopt !== null) toolDeopt(timedRounds); timedRounds(live, N, starts, KR, n, L, tfBad, WARM); }); });
+    const toolTfEnd = (optStatus(timedRounds) & TF_BIT) !== 0;
+    say(ctx, 'WINDOW lane=' + L.id + ' tool-bytes=' + win.bytes + ' scavenges=' + win.scavenges);
     if (inject === 'post-bend') LATE[0] = 1;
     const tierEnd = live.map((e) => (optStatus(e.run) & TF_BIT) !== 0);
     if (w.major !== 0) voids.push('GC-WINDOW major ' + w.major);
@@ -708,6 +778,7 @@ async function runLane(ctx, L, cols, K, inject) {
     for (const c in bop) if (!(bop[c] < ALLOC_MAX)) voids.push('ALLOC ' + c + ' ' + fmt(bop[c], 3) + ' B/op');
     const notTf = live.filter((e, i) => !tierStart[i] || !tierEnd[i] || tfBad[i] !== 0).map((e) => e.col + '#' + e.copy);
     if (notTf.length > 0) voids.push('NOT-TF ' + notTf.join(','));
+    if (!toolTfStart || !toolTfEnd) voids.push('NOT-TF tool timedRounds (TF at window start ' + toolTfStart + ', end ' + toolTfEnd + ')');
 
     const rounds = {}, warm0 = {};
     for (const c of liveCols) {
@@ -1188,6 +1259,7 @@ async function main(ctx, o) {
     say(ctx, 'HEADER GATED ' + Object.keys(ctx.spec.gated).map((id) => id + '=' + ctx.spec.gated[id]).join(' ') + '; every other lane REPORTED');
     provenance(ctx, 'start');
     if (!o.oracleOnly) await gcControl(ctx);
+    if (!o.oracleOnly) armTimed(inject);   // C-23: once per timed run, after the gc-window control, before any lane
     const rows = [];
     for (const l of ctx.spec.lanes) {
         if (!sel.includes(l.id)) continue;
