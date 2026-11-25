@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 
 const writes = [];
 const exitBefore = process.exitCode;
+const globalsBefore = Reflect.ownKeys(globalThis);   // C-32 / M15: string AND symbol keys, before the import
 const realWrite = process.stdout.write;
 let ns = null;
 let importError = null;
@@ -28,6 +29,7 @@ try {
   process.removeListener('exit', onExitDuringImport);
 }
 const exitAfter = process.exitCode;
+const globalsAfter = Reflect.ownKeys(globalThis);
 
 test('import ../ABGate.js is side-effect free', () => {
   if (importError !== null) throw importError;
@@ -35,6 +37,25 @@ test('import ../ABGate.js is side-effect free', () => {
   assert.equal(exitAfter, exitBefore, 'process.exitCode changed during import');
   assert.equal(typeof ns.verdictOf, 'function', 'verdictOf export (C-26)');
   assert.equal(typeof ns.judgeSpec, 'function', 'judgeSpec export (C-26)');
+});
+
+// C-32 (maintainer 2026-11-25), plan-GA ASSERTION 5: importing adds 0 globalThis keys (the __lab* injection cells are
+// created lazily in armNatives, never at import). `addedKeys` is judged by the same function in the must-fail control.
+const addedKeys = (before, after) => after.filter((k) => !before.includes(k)).map(String);
+test('import adds 0 globalThis keys', () => {
+  if (importError !== null) throw importError;
+  assert.deepEqual(addedKeys(globalsBefore, globalsAfter), [], 'import added globalThis keys');
+  for (const k of ['__labSpin', '__labBox', '__labBoxN', '__labLate', '__labWarm']) assert.equal(Object.hasOwn(globalThis, k), false, k + ' exists after import');
+});
+test('import adds 0 globalThis keys: must-fail control (a string key and a symbol key added are both reported)', () => {
+  const sym = Symbol('leak');
+  assert.deepEqual(addedKeys(globalsBefore, [...globalsBefore, '__leak', sym]), ['__leak', 'Symbol(leak)']);
+  assert.deepEqual(addedKeys(globalsBefore, globalsBefore), []);
+});
+test('import adds 0 globalThis keys in a child (fresh process, nothing else loaded)', () => {
+  const CHILD = "const b = Reflect.ownKeys(globalThis); await import(process.argv[1]); const a = Reflect.ownKeys(globalThis); process.stdout.write('ADDED ' + JSON.stringify(a.filter((k) => !b.includes(k)).map(String)) + '\\n');";
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', CHILD, new URL('../ABGate.js', import.meta.url).href], { encoding: 'utf8', timeout: 30000 });
+  assert.equal(r.stdout, 'ADDED []\n', 'a global was added by the import (or the import failed): ' + r.stderr.slice(0, 300));
 });
 
 const PROBE = "const m = await import(process.argv[1]); process.once('beforeExit', () => process.stdout.write('IMPORTED ' + typeof m.verdictOf + ' ' + typeof m.judgeSpec + '\\n'));";
