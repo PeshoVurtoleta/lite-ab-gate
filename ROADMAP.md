@@ -113,3 +113,8 @@ Main-file rungs E1 -> E2 -> J1 -> J2 are sequential; each unit = coder batch + r
 
 - LiteUtils "lite-perf-gate's job" amendment: a LiteUtils burst after this package's first release (C-1).
 - LiteBisect migration to this package: after both 1.0s, parity first (C-9).
+- LiteSignal adoption (maintainer, 2026-11-25: "signal will consume abgate imm after 1.6.0 release"):
+  `@zakkster/lite-signal` (1.5.2 today; roadmap equivalent its LEDGER.md; no ab.yml yet) adopts this package as a
+  devDependency (C-1) right after LiteSignal 1.6.0 is released. Orchestrator note (not part of the quote): this
+  makes lite-ab-gate 1.0 published on npm a prerequisite. A LiteSignal burst, not this program; nothing here edits
+  LiteSignal.

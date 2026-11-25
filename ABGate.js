@@ -641,8 +641,9 @@ function oracleLane(ctx, L, cols, K) {
 }
 
 // ---------------------------------------------------------------- timedRounds (rung E2, C-23 Q-HOTLOOP (a))
-// ab-proto's in-window closure loop, hoisted verbatim except that t0 / t1 live in the T slots: in TF code a clock read
-// stored into a Float64Array never boxes (census (a): 0 B / call), where the closure (called once, never optimized)
+// ab-proto's in-window closure loop, hoisted verbatim except that t0 / t1 live in the T slots: on node >= 26, in TF code
+// a clock read stored into a Float64Array never boxes (census (a), measured on node 26.8.2: 0 B / call; on node 22
+// performance.now() itself boxes 16 B / read, C-31), where the closure (called once, never optimized)
 // boxed t0, t1 and the ns quotient (census (b): 224 B per entry per round). The e.run call site is armed megamorphic on
 // tool-owned dummies (never a lane kernel), so no lane kernel is inlined into the loop.
 const T = new Float64Array(2);

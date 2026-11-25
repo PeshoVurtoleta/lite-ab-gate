@@ -13,13 +13,16 @@
 //                `(TF at window start true, end false)` (isolates the end-of-window check).
 //   - baseline   the frozen pre-E2 loop (ab-proto 74f1a3d4, sha-checked; its timed closure is byte-identical to
 //                ABGate fc7f6663's) with the SAME window probe spliced in (the tool's own windowProbe text):
-//                >= 2688 x 4 = 10752 B (census (b), U2, measured on ab-proto, never on the code under test).
+//                >= 2688 x 4 = 10752 B (census (b), U2, measured on ab-proto, never on the code under test; 2688 is
+//                ab-proto's own 12 entries x 224 B per round, a literal, never derived from C_COPIES).
 // T2 retention: 20 cycles of runGate(toy, { oracleOnly: true, out }), each `out` tracked by @zakkster/lite-leak
 //   (cleanup null, tag a string: neither closes over `out`): tracker.size() === 0 after GC. Must-fail control: the
 //   20 outs kept in an array -> size() reads 20.
 // The GATE line's gc numbers come from @zakkster/lite-gc-profiler over the 3 T1 runs: REPORTED only (the tool forces
 // its own collections: gcControl, gcWindow, the B/op windows), never gated here.
 // AB_TORTURE_TOOL=<path> runs every row against another build (revert check: the frozen pre-E2 build must fail).
+// Node >= 26 only (C-31): below 26 performance.now() boxes 16 B per read, so the zero-tool-bytes WINDOW row cannot
+// hold; the guard below exits 1 (never skips, never exit 0) before the tool import and before any measurement.
 
 import { GcProfiler } from '@zakkster/lite-gc-profiler';
 import { createLeakTracker, createOwnerCascadeOrphanKernel } from '@zakkster/lite-leak';
@@ -29,6 +32,15 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+
+// ---- C-31 node-major guard: fail closed (an unparsable version reads NaN and exits 1 too) -------------------------
+const NODE_SEEN = String(process.versions.node);
+const NODE_MAJOR = Number((/^(\d+)\.\d+\.\d+/.exec(NODE_SEEN) || [])[1]);
+if (!(NODE_MAJOR >= 26)) {
+    console.error('TORTURE FAIL C-31: node >= 26 required (below 26 performance.now() boxes 16 B per read, so the ' +
+        'zero-tool-bytes WINDOW row cannot hold); node seen ' + NODE_SEEN + ' (major ' + NODE_MAJOR + ')');
+    process.exit(1);
+}
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TOOL = process.env.AB_TORTURE_TOOL ? resolve(process.env.AB_TORTURE_TOOL) : resolve(HERE, '..', 'ABGate.js');
@@ -46,7 +58,9 @@ const { runGate, REQUIRED_FLAGS, C_COPIES } = await import(pathToFileURL(TOOL).h
 const ENTRIES = 4 * C_COPIES;               // toy:clean: reps A = B (256), no AB column -> 4 columns x C (the toy declares no C)
 const BOX_MIN = 16 * (K + 1) * ENTRIES;     // 768: one 16 B HeapNumber per live entry per round
 const DEOPT_MIN = 2 * 16 * (K + 1) * ENTRIES;   // 1536: two interpreted clock boxes per live entry per round
-const BASE_MIN = 2688 * (K + 1);            // 10752: census (b) (U2, measured on ab-proto): 224 B x 12 entries per round
+// BASE_MIN floor: 2688 = ab-proto's own 12 entries per round x 224 B (census (b), U2, measured on ab-proto). Deliberately
+// NOT derived from C_COPIES / ENTRIES: the floor must not move with the code under test.
+const BASE_MIN = 2688 * (K + 1);            // 10752
 const rows = [];
 function row(ok, name, txt) {
     rows.push({ ok, name });
