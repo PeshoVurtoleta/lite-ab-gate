@@ -344,7 +344,7 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   ran === total mutant).
 - **Reopens with:** a selftest count or completeness check added without its own must-fail.
 
-### B9. U7: 4 RAW / WARM AB gaps in the J1 judge, 3 confirmed fail-opens plus the WARM AB / A rule *(FOUND 2026-11-25, U7; ruled C-34 / A7; status: retry r1 REJECTED DESIGN (C-47); diff parked .handoff/rejected/U5b2; fix = U5b retry 2)*
+### B9. U7: 4 RAW / WARM AB gaps in the J1 judge, 3 confirmed fail-opens plus the WARM AB / A rule *(FOUND 2026-11-25, U7; ruled C-34 / A7; status: FIXED by U5b retry 2, burst 7, review r1 APPROVED, commit pending; retry r1 had been REJECTED DESIGN (C-47), diff parked .handoff/rejected/U5b2)*
 - **What happened:** the U7 coder found, and the U7 reviewer confirmed, 4 gaps in the J1 judge: RAW AB missing with
   reps differing; a non-numeric RAW value; RAW AB present with equal reps (3 confirmed fail-opens); and the WARM AB / A
   rule, which the maintainer ruled in Q-WARMAB (a) "WARM mirrors AB". C-34: in the tool dialect the AB column rule
@@ -354,10 +354,14 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   were not required to be numeric.
 - **Evidence:** .handoff/HISTORY.md (burst 4, U7); .handoff/lite-ab-gate/SPEC.md C-34, addendum A7.
 - **Law:** law 4; suite law "null is not zero".
-- **Gate:** none yet (U5b retry 2 adds the rows and must-fails).
-- **Reopens with:** U5b retry 2 review APPROVED closes this entry; a RAW / WARM shape the C-34 rule does not reject reopens it.
+- **Gate:** test/judge.extra.test.mjs: 14 C-34 rows (49 rows in all: 8 U7 + 14 C-34 + 6 C-42 + 16 C-47 + 5 C-50, plus 4 C-11
+  REPORTED-label API tests, per .handoff/COMMIT_MSG-U5b3.txt); test/mutants.json C-34 (8 mutants; 63 / 63 killed per the
+  same message). Review r1 (.handoff/overlay-U5b3/REVIEW-r1.md) reran the head judge.extra against base d4991c39: 43 of 56
+  tests red = 39 rows (all 14 C-34, the 5 C-42 and 15 C-47 violation rows, all 5 C-50) + the 4 REPORTED-label tests; the 8
+  U7 rows and the C-42 / C-47 controls green (FILL6 review re-run; r1's split "6 C-42 + 13 C-34" mis-partitions the same 43). Commit pending.
+- **Reopens with:** a RAW / WARM shape the C-34 rule does not reject reopens it.
 
-### B10. U5b r1: a REPORTED lane with unparsed or duplicated RESULT reps skipped the C-34 AB rule and read PASS *(FOUND 2026-11-25 burst 5, U5b review r1 DESIGN; ruled C-42 / SPEC A9; fix = U5b retry 2, not yet approved)*
+### B10. U5b r1: a REPORTED lane with unparsed or duplicated RESULT reps skipped the C-34 AB rule and read PASS *(FOUND 2026-11-25 burst 5, U5b review r1 DESIGN; ruled C-42 / SPEC A9; FIXED by U5b retry 2, burst 7, review r1 APPROVED, commit pending)*
 - **What happened:** review r1 REJECTED the U5b diff (head ABGate.js 2205b4e3). A lane with exactly one RESULT whose reps
   cannot be parsed (`reps=A:4,B:1,AB:1x`, or reps printed twice) got differ = null, so the RAW / WARM AB rule was never
   checked; the verdict read PASS (code 0) even with RAW AB= and WARM AB/A= on that lane (reviewer probes P1, P1b, P1c).
@@ -368,10 +372,13 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Evidence:** .handoff/rejected/U5b.restored-1795635615114/REVIEW-r1.md (the parked U5b diff, also named .handoff/rejected/U5b in HISTORY);
   .handoff/lite-ab-gate/SPEC.md C-42, addendum A9; .handoff/HISTORY.md (burst 5).
 - **Law:** law 4; suite law "null is not zero".
-- **Gate:** none yet (U5b retry 2 adds the rows and must-fails).
-- **Reopens with:** U5b retry 2 review APPROVED closes this entry; a reps shape the C-42 rule does not reject reopens it.
+- **Gate:** test/judge.extra.test.mjs: 6 C-42 rows (incl. the no-reps-field row the r1 LITERAL asked for); test/mutants.json
+  C-42 (5 mutants, incl. C42e; 63 / 63 killed per .handoff/COMMIT_MSG-U5b3.txt). The 2 C-42 judge.rows / selftest expectations
+  moved from "(gated lane not clean)" to "(run shape)" are re-pinned oracle edits (reviewed). Review r1
+  (.handoff/overlay-U5b3/REVIEW-r1.md): the 5 C-42 violation rows red on d4991c39, the C-42 control green. Commit pending.
+- **Reopens with:** a reps shape the C-42 rule does not reject reopens it.
 
-### B11. U5b retry r1: RESULT ab / B/AB / wordAB / bop AB columns unchecked on REPORTED lanes (two PASS probes) *(FOUND 2026-11-25 burst 6, U5b retry review r1 DESIGN; ruled C-47 / SPEC A12; fix = U5b retry 2, not yet approved)*
+### B11. U5b retry r1: RESULT ab / B/AB / wordAB / bop AB columns unchecked on REPORTED lanes (two PASS probes) *(FOUND 2026-11-25 burst 6, U5b retry review r1 DESIGN; ruled C-47 / SPEC A12; FIXED by U5b retry 2, burst 7, review r1 APPROVED, commit pending)*
 - **What happened:** review r1 of the retry (head ABGate.js 9156bd9a) REJECTED DESIGN. The C-34 AB rule was enforced on a
   REPORTED lane for RAW and WARM but not for RESULT. Probe (a): y:r reps=A:4,B:1,AB:1 with RESULT ab / B/AB / wordAB =
   n/a and no AB entry in bop; probe (b): y:r equal reps but RESULT carrying ab / B/AB / wordAB values. Both read
@@ -382,11 +389,19 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Root cause:** same mechanism as B10: a reported lane's NOT-CLEAN label never reaches the verdict. Lesson: the retry fixed the instance (unparsed reps, C-42) but not the class: any reported-lane line-family check
   that only labels is fail-open. When a check is added for one line family, sweep every other family the same rule names
   (RESULT, RAW, WARM, bop) on reported lanes before submitting.
+  In retry 2 the coder's own B11 sweep found two more such gaps: the RESULT reps AB part (ruled C-50, fixed in the same
+  unit) and RESULT grammar (ab / B/AB not finite, wordAB, bop printed twice; ruled C-51, unit U5c), both still
+  label-only on reported lanes.
 - **Evidence:** .handoff/rejected/U5b2/REVIEW-r1.md (diff parked in .handoff/rejected/U5b2); .handoff/lite-ab-gate/SPEC.md
   C-47, addendum A12.
 - **Law:** law 4; suite law "null is not zero".
-- **Gate:** none yet (U5b retry 2 adds the rows and mutants).
-- **Reopens with:** U5b retry 2 review APPROVED closes this entry; a line family on a reported lane that still only labels reopens it.
+- **Gate:** test/judge.extra.test.mjs: 16 C-47 rows and 5 C-50 rows (law-8 boundaries on the AB-entry count and AB:n = B +- 1),
+  plus the 4 C-11 REPORTED-label API tests; test/mutants.json C-47 (11 mutants, C47a..k) and C-50 (3, C50a..c); 63 / 63
+  killed, per .handoff/COMMIT_MSG-U5b3.txt; re-pins: 3 C-47 + 3 C-50 judge.rows / selftest judgeRows rows, (gated lane not
+  clean) -> (run shape). Review r1 (.handoff/overlay-U5b3/REVIEW-r1.md): the 15 C-47 violation rows, all 5 C-50 rows and the 4
+  REPORTED-label tests red on d4991c39 (the C-47 control green); 60 fail-open probes ({y:r, y:g} x 30 conditions) all in scope fail closed. Open there: the C-51
+  leads (y:r PASS with a label only) go to U5c. Commit pending.
+- **Reopens with:** a line family on a reported lane that still only labels reopens it (C-51 grammar is U5c's).
 
 ### B12. U9 B1: review findings on bench/reproof.mjs (r1: 3 fail-opens + 2 gate-teeth LITERAL; r2: 1 fail-open; r3: 2-line round) *(FOUND 2026-11-25 burst 5, U9 B1 review r1 / r2; FIXED r3, commit 224bf19)*
 - **What happened:** the U9 B1 coder delivered the C-23 re-proof probe (91 deterministic rows, mutation harness 62 / 62).
@@ -401,9 +416,59 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Gate:** test/reproof.judge.test.mjs (91 deterministic rows on judgeHolds in bench/reproof.mjs; npm test); the judge mutation harness (62 / 62 per COMMIT_MSG-U9B1.txt) is a one-off run (.handoff/evidence/U9-B1/task4-judge-mutants*.log), not a standing test.
 - **Reopens with:** a judge guard in bench/reproof.mjs with no row that fails on it alone.
 
+### B13. FILL5: the runner-identity guard `: "${ImageOS:?unset}"` could be satisfied ahead of itself by five routes; the docs.template test pinned only the guard line *(FOUND 2026-11-25 burst 7, FILL5 review r1 + r2, both REJECTED; ruled C-52 / C-53; parked .handoff/rejected/FILL5; fix = FILL5 retry)*
+- **What happened:** the guard in templates/ab.yml and the dogfood .github/workflows/ab.yml (`: "${ImageOS:?unset}"`) is the
+  runner-identity check. FILL3 review r1 (nit 3, FILL5's goal) found route (1) and review of the FILL5 test-only diff
+  (test/docs.template.test.mjs) found routes (2)-(5): five routes that set
+  ImageOS before the guard reads it while the pinned guard line stays intact: (1) another line before the guard in the
+  run block (e.g. `ImageOS="${ImageOS:-unknown}"`); (2) an `ImageOS:` key in the step env after a blank or comment line
+  (the env scan stopped there; a YAML comment does not end a mapping); (3) an earlier step writing `ImageOS=x` to
+  $GITHUB_ENV; (4) a job-level or top-level `env:`; (5) job `container:` (its own env or image ENV) or `runs-on:
+  self-hosted`. r1 and r2 each REJECTED (2 LITERAL + 1 DESIGN each). The maintainer ruled C-52 (pin the job env key set,
+  fail any top-level env) and C-53 (pin the ab job key set and `runs-on: ${{ matrix.os }}`).
+- **Root cause:** the test pinned the single guard line, not what can reach that line's value; an identity guard is only
+  as strong as everything that can set the variable it reads.
+- **Evidence:** .handoff/rejected/FILL5/REVIEW.md (r1 + r2; r2 verified 66 / 66, each mutant killed by its own check alone;
+  unverified there: GitHub's parser on escaped / explicit-key YAML forms, and container env reaching run: steps);
+  .handoff/lite-ab-gate/SPEC.md C-52, C-53, addenda A15, A16.
+- **Law:** law 4 (a guard needs a control that fails on it alone); law 7 (a runner whose identity is not proven is STOP, not host evidence).
+- **Gate:** none yet (FILL5 retry applies the r2 fixes and C-52 / C-53 in test/docs.template.test.mjs). Until it lands,
+  the pinned guard line alone is the gate and the five routes are open. The "13 checks / 37 mutants" count in B-entry
+  text above (suite state at FILL3) goes stale when FILL5 lands.
+- **Reopens with:** FILL5 retry review APPROVED closes this entry; a sixth route to ImageOS ahead of the guard reopens it.
+
 ## C. Measurements (this package's own runs on ABGate.js)
 
-(none yet)
+Placement: the U9D numbers below were measured on ABGate.js d4991c39 (frozen copy of HEAD 224bf19), so they are section C,
+not X.
+
+### C1. U9D: the C-43 `tool-bytes=4320` on `bounds:1e5:1e5` is lane-kernel JIT bytes, and AB copies tier `boundsInto` up at their 4th call *(FOUND 2026-11-25 burst 6, U9D probe; RULED C-48 / C-49; status: RULED, unit U9E pending)*
+- **What happened:** G (ABGate.js d4991c39) printed `WINDOW lane=bounds:1e5:1e5 tool-bytes=4320` in the calibration run
+  (toy lanes 0). The probe split it: 4320 B = 8 synchronous TurboFan compiles of 8 distinct `boundsInto` SFIs (LiteOhlc
+  Ohlc.js, the lane's non-inlined callee; 8 of the 12 A-family copies) inside the window, mean 540 B each; tool 0 B. The
+  lane alone reads 7968 (the same 8 plus one Maglev compile of Node's lazy `globalThis.performance` getter, which is on
+  the timedRounds clock path and so tool-owned, <= 144 B). K=21 also read 7968 (one-time, not per round). Side finding:
+  AB copies (reps 1) compile `boundsInto` in their 4th call: RAW AB rounds 1-2 read 1.31-1.47 against about 1.15
+  settled, and round 3 reads 107-128x (a 1.2-1.8 ms synchronous compile inside AB's clock span) in b-g2 / b-k21 /
+  b-trace / b-all-trace and in the calibration hold-0 G, M, P runs; flat after the DRY / PRECENSUS passes.
+  Provenance (FINDING.md): darwin arm64 Apple M4 Pro, node v26.8.2 (v8 14.6.202.34-node.28), 2026-11-25 19:43-19:53 UTC,
+  G's REQUIRED_FLAGS, runs through quiet-lock (not --strict): p1 / batch1 / batch2 started QUIET (load1 2.53 / 2.12 /
+  1.65, baseline 2.21); p0 QUIET (load1 2.64); empty.mjs ran without the lock at load1 3.2-4.4 (PRELIMINARY, byte counts
+  only). Byte counts are host-independent. The probe timed nothing on purpose; the RAW AB round ratios are incidental
+  RAW lines of non-strict runs (PRELIMINARY), read from the logs the FINDING names, not re-run here: b-g2 / b-k21 /
+  b-trace / b-all-trace (window above) and the U9 calibration hold-0 G, M, P runs (.handoff/evidence/U9-cal/hold-0/, from
+  2026-11-25 06:47 UTC; 1-G.log PROV load1 2.90, busy-node [11.4 75921 node]).
+- **Root cause:** G brings each entry's `run` to TurboFan and checks `run`'s tier at the window edges, but not its
+  non-inlined callees; the NOT-TF check cannot see a callee tier-up inside the window.
+- **Evidence:** .handoff/research/U9D/FINDING.md and its logs/ (harness review r1 REJECTED LITERAL, r2 APPROVED at
+  40309b36); .handoff/lite-ab-gate/plan-U9E-v1.md; SPEC C-43, C-48, C-49, addenda A13, A14.
+- **Law:** law 3 (a TF entry is not a TF path; an allocation gate must be able to see the box). Ruled mechanism: C-48
+  (untimed settle passes before the window until one reads exactly 0 B, cap 3, else VOID TIER-SETTLE; the C-36 / C-43 KILL
+  on tool-bytes > 0 stands; the `performance` read hoisted to a module const); C-49 (the injections no-settle and
+  settle-void are torture-only, out of the timed --selftest list).
+- **Gate:** none yet (U9E adds T-SETTLE on a frozen-only R1-shaped lane with AB_GATE_INJECT=no-settle as its must-fail,
+  and the settle-void control for VOID TIER-SETTLE; plan-U9E-v1.md).
+- **Reopens with:** U9E review APPROVED plus a new frozen G re-run closes the U9E part; a callee tier-up inside the window on a settled lane reopens it.
 
 ## D. Process lessons
 

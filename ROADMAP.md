@@ -18,7 +18,7 @@
   (`node ~/.claude/hooks/quiet-lock.mjs run "<what>" -- <cmd>`; `--strict` for a release-gating timing).
 - U9 statistical re-proof of the hoisted timed loop vs frozen ab-proto 74f1a3d4 is REQUIRED before 1.0 (C-23).
 
-## 2. SETTLED (binding for every agent; C-1..C-47)
+## 2. SETTLED (binding for every agent; C-1..C-53)
 
 C-3, C-13, C-14 and C-16 rest on suite law or R1 findings, and C-18..C-21 and C-29 are orchestrator / planner
 reconciliations, and C-46 records E1 behaviour (U3 review r1, A3); the other rows are maintainer rulings (the Q-id, where one exists, and the option label are in the SPEC).
@@ -103,7 +103,7 @@ reconciliations, and C-46 records E1 behaviour (U3 review r1, A3); the other row
 - C-34 RAW / WARM AB (Q-WARMAB (a) "WARM mirrors AB", maintainer 2026-11-25; SPEC A7): tool dialect only (legacy
   unchanged). The AB rule of C-11 holds on RESULT, RAW and WARM: reps differ -> all three carry AB (RAW AB exactly K
   values, C-28); reps equal -> none does; every RAW value must parse as a finite number; any violation -> NO VERDICT
-  (code 2). Implementing unit: U5b retry 2 (with C-42, C-47).
+  (code 2). Implementing unit: U5b retry 2 (with C-42, C-47, C-50).
 - C-35 U9 HOST (Q-U9-HOST (a) "Local strict holds only"): the C-23 re-proof runs as 5 LOCAL `quiet-lock run --strict`
   holds (one hold per call; the R1 lane binds absolute LiteOhlc paths, C-17 forbids that hosted); the hosted path is
   proven separately by the C-24 dogfood dispatch at U11; U9 is PRELIMINARY unless QUIET.
@@ -120,13 +120,13 @@ reconciliations, and C-46 records E1 behaviour (U3 review r1, A3); the other row
 - C-39 TIMEDHOME (Q-TIMEDHOME (a) "Local harness + script"): test/selftest.timed.mjs + an npm script, run under
   `quiet-lock run --strict` before each dogfood dispatch; never inside npm test / verify (C-3).
 - C-40 WARMCOLS (Q-WARMCOLS (a) "Yes, exact WARM grammar"): TOOL dialect: WARM columns are exactly A/A B/A AA/A SLOW/A
-  [AB/A] in that order, each value NUM_RE / finite; else NO VERDICT (code 2). Engine unit U5c (not U5b).
+  [AB/A] in that order, each value NUM_RE / finite; else NO VERDICT (code 2). Engine unit U5c (not U5b), with C-41 and C-51.
 - C-41 RAWEXTRA (Q-RAWEXTRA (a) "Yes, unknown RAW column fails"): TOOL dialect: RAW columns are exactly B/A AA SLOW
-  [AB]; any other column -> NO VERDICT (code 2). Engine unit U5c, with C-40.
+  [AB]; any other column -> NO VERDICT (code 2). Engine unit U5c, with C-40 and C-51.
 - C-42 REPSUNP (Q-REPSUNP (a) "Run shape, any lane"): TOOL dialect: a lane (gated OR reported) whose RESULT reps field
   is unparsed or duplicated -> run shape NO VERDICT (code 2), because the C-34 AB rule cannot be verified (C-14);
   gated lanes' heading moves from "(gated lane not clean)" to "(run shape)"; the judge.rows / selftest expectations it moves are
-  re-pinned in the same engine unit (oracle edit, reviewed). Implementing unit: U5b retry 2.
+  re-pinned in the same engine unit (oracle edit, reviewed). Implementing unit: U5b retry 2 (with C-47, C-50).
 - C-43 U9 BYTES (Q-U9-BYTES (a) "Keep KILL, diagnose first"): G (ABGate.js 311761f / d4991c39) prints `WINDOW lane=bounds:1e5:1e5 tool-bytes=4320`
   in 3/3 calibration G-family runs (tool verdict PASS); the C-36 KILL on G tool-bytes > 0 STANDS; diagnosis unit U9D runs BEFORE U9 B2; tool
   bytes -> engine fix + a torture row on the R1 lane, otherwise the maintainer rules the rescoping.
@@ -140,7 +140,32 @@ reconciliations, and C-46 records E1 behaviour (U3 review r1, A3); the other row
 - C-47 RESULTAB (Q-RESULTAB (a) "Run shape, any lane"): TOOL dialect: on EVERY lane (gated OR reported), when reps
   differ the RESULT line carries ab, B/AB and wordAB, each present and not n/a, and exactly one AB: entry in bop; when
   reps are equal, ab, B/AB and wordAB are all n/a and bop has no AB entry. Any violation -> run shape NO VERDICT (code
-  2). Implementing unit: U5b retry 2.
+  2). Implementing unit: U5b retry 2 (with C-50).
+- C-48 SETTLE (Q-U9-BYTES-2 (a) "Settle before window"): the C-43 bytes are lane-kernel JIT bytes (8 synchronous TF compiles of
+  the R1 callee boundsInto inside the window). runLane runs untimed dry timedRounds passes at the timed shape before
+  gcWindow until one reads exactly 0 B (NaN / negative = not settled; cap 3; else VOID TIER-SETTLE, never PASS; no VOID
+  lane re-run, C-7); `performance` hoisted to a module const; the C-36 / C-43 KILL on G tool-bytes > 0 stands.
+  Pre-tier newSpaceUsed / windowProbe in armTimed; a 0 B pass proves bytes only. New frozen G (commit + sha); U9
+  calibration restarts on it before U9 B2. Torture T-SETTLE on a frozen-only R1-shaped lane (bounds:1e5:1e5, K=3,
+  tool-bytes 0 in 3/3), must-fail AB_GATE_INJECT=no-settle; settle-void = must-fail for VOID TIER-SETTLE; after a
+  TIER-SETTLE the single window still runs (C-7); -0 counts as 0; SETTLE / TIER-SETTLE grammar in SPEC C-48 (A14).
+  Implementing unit: U9E (plan-U9E-v1.md).
+- C-49 SETTLE SELFTEST (Q-SETTLE-SELFTEST (a) "Torture-only, like tool-deopt"): the injections no-settle and settle-void
+  stay out of the timed --selftest list; the npm test marker gate and torture carry them; selftest counts (untimed 67,
+  timed 11), the U8 workflow and the doc counts do not change for U9E. Implementing unit: U9E.
+- C-50 REPSAB (Q-REPSAB (a) "Run shape, any lane"): TOOL dialect: on every lane the RESULT reps AB part follows C-11
+  (reps differ -> AB:<n> with n = B reps; equal -> none); any violation -> run shape NO VERDICT (code 2). Implementing
+  unit: U5b retry 2 (with C-42, C-47).
+- C-51 RESULTGRAM (Q-RESULTGRAM (a) "Grammar=shape, in U5c"): TOOL dialect, every lane: unparseable or inconsistent RESULT
+  values (ab / B/AB not finite when not n/a by C-47, wordAB not matching B/AB, bop printed twice, a non-numeric bop entry) -> run shape NO
+  VERDICT (code 2); REPS-DRIFT and ALLOC bop >= 1/64 stay lane VOID labels on reported lanes (C-15). Implementing unit: U5c (with C-40 / C-41).
+- C-52 IMAGEOS-ENV (Q-IMAGEOS-ENV (a) "Pin env now, in FILL5"): test/docs.template.test.mjs pins the job env's exact key
+  set (values free) and fails any top-level `env:` in every workflow file it checks, so nothing outside the
+  runner-identity step can set ImageOS ahead of the guard. Implementing unit: FILL5 retry.
+- C-53 JOBKEYS (Q-JOBKEYS (a) "Pin the job key set"): the same test pins the ab job's exact key set (name, runs-on,
+  timeout-minutes, strategy, env, steps) and runs-on exactly `${{ matrix.os }}` in every workflow file it checks; top-level keys are an allowlist (name, on,
+  permissions, defaults, jobs) and a
+  comment line never ends an env scan. Implementing unit: FILL5 retry (parked .handoff/rejected/FILL5).
 
 Open maintainer questions: none.
 
