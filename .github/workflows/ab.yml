@@ -8,7 +8,7 @@
 # Verdict per OS (ABGate.js prints one `VERDICT ...` line and exits with it): 0 PASS | 3 FINDING | 2 NO VERDICT |
 # 1 STOP / CRASH (also NO VERDICT). The gate passes only when BOTH OS read PASS in the same dispatch.
 # A NO VERDICT run gets ONE re-dispatch; a FINDING is never re-run to get the word back.
-# A harness failure on a runner (a failed step before the gate, a STOP, a crash) is NO VERDICT, never host evidence.
+# A harness failure on a runner (a failed step before the gate, a red selftest, a STOP, a crash) is NO VERDICT, never host evidence.
 # AB_GATE: your gate file, repo-relative (no leading slash, no ~, no ..); the path guard step rejects anything else.
 # Kernel paths inside it are relative to the gate file's directory; the tool STOPs HARNESS on an absolute path when
 # GITHUB_ACTIONS=true, so nothing this workflow runs depends on a local absolute path.
@@ -139,11 +139,12 @@ jobs:
                 ;;
             esac
           } 2>&1 | tee logs/provenance.log
-      # STOP gate: every selftest case must pass, else no gate run
+      # STOP gate: every selftest case must pass and the timed cases must have run (timed >= 1), else no gate run
       - name: selftest
         run: |
           node $FLAGS "$AB_TOOL" "$AB_GATE" --selftest 2>&1 | tee logs/selftest.log
           grep -qx 'SELFTEST all ok' logs/selftest.log
+          grep -Eqx 'SELFTEST ran [0-9]+ of [0-9]+ \(untimed [0-9]+, timed [1-9][0-9]*\)' logs/selftest.log
       # the step's status is the tool's verdict code: 0 PASS / 3 FINDING / 2 NO VERDICT / 1 STOP (recorded in exit-code.txt)
       - name: gate (--run ALL)
         run: |
@@ -162,6 +163,17 @@ jobs:
         run: |
           {
             echo "### ab gate, $MOS (exit $(cat logs/exit-code.txt 2>/dev/null || echo 'none'))"
+            echo
+            # the selftest STOP gate: all ok AND the timed cases ran (timed >= 1), else the run is NO VERDICT
+            ran=''
+            if [ -f logs/selftest.log ] && grep -qx 'SELFTEST all ok' logs/selftest.log; then
+              ran="$(sed -n -E 's/^SELFTEST (ran [0-9]+ of [0-9]+ \(untimed [0-9]+, timed [1-9][0-9]*\))$/\1/p' logs/selftest.log)"
+            fi
+            if [ -n "$ran" ]; then
+              echo "selftest: all ok, $ran"
+            else
+              echo 'selftest: red or not run -> STOP -> NO VERDICT, never host evidence'
+            fi
             echo
             echo '```'
             if [ -f logs/gate.log ] && grep -q '^VERDICT ' logs/gate.log; then

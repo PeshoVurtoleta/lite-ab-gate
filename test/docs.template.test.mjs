@@ -1,4 +1,5 @@
-// docs.template.test.mjs -- the workflow template drift guard (plan-GC TASK 6, ASSERTION 1; C-7, C-14, C-17, C-24, C-31).
+// docs.template.test.mjs -- the workflow template drift guard (plan-GC TASK 6, ASSERTION 1; C-7, C-14, C-17, C-24, C-31;
+// plan-U8 TASK 5: the selftest STOP gate requires timed >= 1, and the summary names a red selftest NO VERDICT).
 // DETERMINISTIC: reads templates/ab.yml, .github/workflows/ab.yml, .github/workflows/ci.yml and examples/ as TEXT
 // (zero deps: YAML parsed as lines) and checks them against ABGate.js's REQUIRED_FLAGS and EXIT. Teeth: every check also
 // runs on in-memory mutants of the real files; on each mutant exactly its own check must fail and every other check
@@ -87,10 +88,39 @@ const GATE_RE = /^(      AB_GATE: )(\S+)(  # PARAM: .*)$/;
 const OWN_GATE = 'examples/ab.gate.mjs';
 const CP_LINE = 'cp node_modules/@zakkster/lite-ab-gate/templates/ab.yml .github/workflows/ab.yml';
 const GATE_STEP = 'gate (--run ALL)';
+// the timed-case count the selftest must report (ABGate.js selftest's summary line), as a POSIX ERE that JS reads alike;
+// accepts the timed run, rejects the untimed-only form and timed 0 (stopgate + the static row below)
+const COUNT_ERE = 'SELFTEST ran [0-9]+ of [0-9]+ \\(untimed [0-9]+, timed [1-9][0-9]*\\)';
 const SELFTEST_RUN = [
     'node $FLAGS "$AB_TOOL" "$AB_GATE" --selftest 2>&1 | tee logs/selftest.log',
     "grep -qx 'SELFTEST all ok' logs/selftest.log",
+    "grep -Eqx '" + COUNT_ERE + "' logs/selftest.log",
 ].join('\n');
+// the summary's selftest block (exact text, dedented): a red or untimed selftest reads STOP -> NO VERDICT (law 7, C-17)
+const SUMMARY_SELFTEST = [
+    '# the selftest STOP gate: all ok AND the timed cases ran (timed >= 1), else the run is NO VERDICT',
+    "ran=''",
+    "if [ -f logs/selftest.log ] && grep -qx 'SELFTEST all ok' logs/selftest.log; then",
+    "  ran=\"$(sed -n -E 's/^SELFTEST (ran [0-9]+ of [0-9]+ \\(untimed [0-9]+, timed [1-9][0-9]*\\))$/\\1/p' logs/selftest.log)\"",
+    'fi',
+    'if [ -n "$ran" ]; then',
+    '  echo "selftest: all ok, $ran"',
+    'else',
+    "  echo 'selftest: red or not run -> STOP -> NO VERDICT, never host evidence'",
+    'fi',
+].join('\n');
+// real ABGate.js selftest summary lines: the timed run (examples/ab.gate.mjs, plan-U8 A1) and the two forms the gate must refuse
+const COUNT_OK = 'SELFTEST ran 78 of 78 (untimed 67, timed 11)';
+const COUNT_BAD = ['SELFTEST ran 67 of 67 (untimed 67, timed not run: --selftest-untimed)', 'SELFTEST ran 67 of 67 (untimed 67, timed 0)'];
+/** The count problems of a POSIX ERE read as a JS whole-line regex (grep -x / sed ^...$). */
+function countProblems(ere) {
+    let re;
+    try { re = new RegExp('^(?:' + ere + ')$'); } catch (e) { return ['count regex does not compile: ' + e.message]; }
+    const p = [];
+    if (!re.test(COUNT_OK)) p.push('count regex rejects the timed run ' + JSON.stringify(COUNT_OK));
+    for (const b of COUNT_BAD) if (re.test(b)) p.push('count regex accepts ' + JSON.stringify(b));
+    return p;
+}
 const GATE_RUN = [
     'set +e',
     'node $FLAGS "$AB_TOOL" "$AB_GATE" --run ALL 2>&1 | tee logs/gate.log',
@@ -287,6 +317,24 @@ const CHECKS = {
         }
         return p;
     },
+    // plan-U8 TASK 5 (law 7, C-17): the summary step carries the exact selftest block, and its count regex (the sed
+    // capture, read as a JS whole-line regex) accepts the timed run and rejects the untimed-only form and timed 0
+    stopgate(w) {
+        const p = [];
+        for (const [f, t] of WFS(w)) {
+            const s = stepsOf(t).filter((x) => x.name === 'verdict to the job summary');
+            if (s.length !== 1) { p.push(f + ': ' + s.length + ' summary steps'); continue; }
+            const r = runBlocksOf(s[0].text);
+            const body = r.length === 1 ? dedent(r[0].text) : '';
+            const lines = linesOf(body).map((l) => l.replace(/^  /, ''));
+            const i = lines.indexOf(linesOf(SUMMARY_SELFTEST)[0]);
+            if (i < 0 || lines.slice(i, i + linesOf(SUMMARY_SELFTEST).length).join('\n') !== SUMMARY_SELFTEST) p.push(f + ': summary step lacks the exact selftest STOP block');
+            const m = /sed -n -E 's\/\^SELFTEST \((.*)\)\$\/\\1\/p' logs\/selftest\.log/.exec(body);
+            if (m === null) p.push(f + ': summary step has no selftest count capture');
+            else for (const e of countProblems('SELFTEST ' + m[1])) p.push(f + ': summary ' + e);
+        }
+        return p;
+    },
     // ci.yml: 2 OS x node 22 / 24 / 26 + 2 pin legs = 8; npm ci + npm test on all, torture only on node 26 legs (C-31);
     // no timed step (C-3)
     ci(w) {
@@ -387,6 +435,11 @@ const MUTANTS = [
     ['M27 (E2) set +eo pipefail in the path guard', 'failclosed', mutant('both', '          case "$AB_GATE" in\n', '          set +eo pipefail\n          case "$AB_GATE" in\n')],
     ['M28 (E4) tool check || echo', 'failclosed', mutant('both', 'test -f "$AB_TOOL"\n', 'test -f "$AB_TOOL" || echo missing\n')],
     ['M29 (E5) ci npm test || echo', 'failclosed', mutant('ci', 'run: npm test\n', 'run: npm test || echo failed\n')],
+    // plan-U8 TASK 5: the selftest STOP gate (timed >= 1) and its summary wording
+    ['M30 selftest count grep dropped', 'failclosed', mutant('both', "          grep -Eqx '" + COUNT_ERE + "' logs/selftest.log\n", '')],
+    ['M31 summary count regex accepts timed 0', 'stopgate', mutant('both', 'timed [1-9][0-9]*\\))$/', 'timed [0-9]*\\))$/')],
+    ['M32 summary selftest block dropped', 'stopgate', mutant('both', '            ' + linesOf(SUMMARY_SELFTEST).join('\n            ') + '\n', '')],
+    ['M33 selftest count grep || true', 'failclosed', mutant('both', "grep -Eqx '" + COUNT_ERE + "' logs/selftest.log\n", "grep -Eqx '" + COUNT_ERE + "' logs/selftest.log || true\n")],
 ];
 
 // ---------------------------------------------------------------- tests
@@ -406,6 +459,13 @@ for (const [what, target, mk] of MUTANTS) {
         assert.deepEqual(failing(m), [target]);
     });
 }
+test('the count regex: accepts the timed run, rejects untimed-only and timed 0; the loosened form is caught (control)', () => {
+    assert.deepEqual(countProblems(COUNT_ERE), []);
+    assert.ok(SELFTEST_RUN.includes("'" + COUNT_ERE + "'") && SUMMARY_SELFTEST.includes(COUNT_ERE.slice('SELFTEST '.length)), 'step and summary share COUNT_ERE');
+    assert.deepEqual(countProblems(COUNT_ERE.replace('[1-9][0-9]*', '[0-9]*')), ['count regex accepts ' + JSON.stringify(COUNT_BAD[1])]);
+    assert.equal(countProblems(COUNT_ERE.replace('timed [1-9][0-9]*', 'timed .*')).length, 2);
+    assert.equal(countProblems(COUNT_ERE.replace('timed', 'timedX')).length, 1);
+});
 test('the real files are untouched by the mutants (in-memory only)', () => {
     assert.deepEqual(loadWorld(), WORLD);
 });
