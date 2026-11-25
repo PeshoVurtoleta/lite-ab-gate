@@ -18,10 +18,10 @@
   (`node ~/.claude/hooks/quiet-lock.mjs run "<what>" -- <cmd>`; `--strict` for a release-gating timing).
 - U9 statistical re-proof of the hoisted timed loop vs frozen ab-proto 74f1a3d4 is REQUIRED before 1.0 (C-23).
 
-## 2. SETTLED (binding for every agent; C-1..C-29)
+## 2. SETTLED (binding for every agent; C-1..C-33)
 
 C-3, C-13, C-14 and C-16 rest on suite law or R1 findings, and C-18..C-21 and C-29 are orchestrator / planner
-reconciliations; the other rows are maintainer rulings (the Q-id and option label are in the SPEC).
+reconciliations; the other rows are maintainer rulings (the Q-id, where one exists, and the option label are in the SPEC).
 
 - C-1 HOME (Q-HOME (a)): a NEW single-file package, main ABGate.js, zero runtime deps, consumed as a
   devDependency; never a LitePerfGate mode or second file.
@@ -84,6 +84,21 @@ reconciliations; the other rows are maintainer rulings (the Q-id and option labe
 - C-29 TEST FLOOR (orchestrator reconciliation, U1 2026-11-24): `node --test` with no matching file exits 0, so
   test/import.test.mjs imports ../ABGate.js and asserts a side-effect-free import (fails with ERR_MODULE_NOT_FOUND
   until the engine exists, so npm test fails closed); the U10 docs test asserts a test-file floor. LEDGER B1.
+- C-30 SELFTEST FROZEN-ONLY (Q-SELFTEST-LIVE (a) "Proven n/a row", maintainer 2026-11-24): when no frozen entry
+  binds live, the --selftest live-drift row prints 'n/a (frozen only)' and does not fail, but ONLY if the frozen-only
+  HEADER line ('live not bound (frozen only)') is present in the same run (else the row fails); a gate with a live
+  binding runs the row as today (must-fail: n/a without the HEADER line = red). examples/ab.gate.mjs stays frozen-only (C-24 unchanged).
+- C-31 TORTURE NODE (Q-TORTURE-NODE (a) "Torture on node >= 26 only", maintainer 2026-11-24): on Node 22
+  performance.now() boxes 16 B per read, so the zero-tool-bytes WINDOW row cannot hold there. ci.yml runs npm test on
+  node 22 / 24 / 26 but `npm run torture` only on the node 26 legs; test/torture.mjs exits 1 (never skips) on node < 26;
+  the zero-tool-bytes claim is scoped to node >= 26; engines stays >= 22; the verdict host pin (AB_NODE 26.8.2) is unchanged.
+- C-32 IMPORT-TEST OWNER (maintainer 2026-11-25, burst 3 "Helper adds it now"): the G-A B3 helper adds the
+  import-adds-0-globalThis-keys check (+ its must-fail) to test/import.test.mjs; amends C-29 (afterwards the U10 docs
+  batch is again the file's only editor).
+- C-33 LANESHA (Q-LANESHA (a) "Require in tool dialect", maintainer 2026-11-25): in the tool dialect (dialect omitted) judgeSpec THROWS
+  when laneSha is missing / undefined / null or not 64 lowercase hex; verdictOf returns code 2 (NO VERDICT) for a
+  tool-dialect spec with a bad laneSha; the legacy 'ab-gate@7e0f9262' dialect ignores laneSha (C-27); the d.ts keeps
+  `laneSha?` optional at type level; its doc says 'required in the tool dialect (C-33); judgeSpec throws if omitted' (supersedes 'Omit = not checked').
 
 Open maintainer questions: none.
 

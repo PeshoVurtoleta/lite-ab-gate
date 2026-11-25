@@ -235,6 +235,55 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   asserts a test-file floor.
 - **Reopens with:** a test glob or runner change that again lets an empty run pass.
 
+### B2. Fail-closed workflow steps were checked by presence only, so `continue-on-error` / `|| true` / `set +e` / `|| echo` slipped through *(FOUND 2026-11-25, G-C B2 review r1 / r2; FIXED r3)*
+- **What happened:** the docs.template test for templates/ab.yml and the ci.yml check asserted that the fail-closed
+  steps were present. Review r1 REJECTED 2 LITERAL findings (presence-only fail-closed checks; ci concurrency on
+  main); r2 REJECTED 1 LITERAL (`|| echo` and `set +eo` still slipped); r3 APPROVED. The suite is 12 checks / 29 mutants.
+- **Root cause:** a check that a step exists does not see a neutralizer attached to it (`continue-on-error`, `|| true`,
+  `set +e`, `|| echo`); the check passed on a workflow whose failure could not fail the job.
+- **Evidence:** .handoff/HISTORY.md (burst 3, G-C B2); .handoff/evidence/U4-GCB2-docs-template.log,
+  U4-GCB2r2-docs-template.log, U4-GCB2r3-docs-template.log (gitignored run logs).
+- **Law:** law 4 (a gate fails open until a control proves it closed).
+- **Gate:** test/docs.template.test.mjs (a mutant per neutralizer form).
+- **Reopens with:** a new way to neutralize a step's exit status that no mutant covers.
+
+### B3. A d.ts gate outside the `npm test` glob and a test that skips when tsc is absent were vacuous passes *(FOUND 2026-11-25, G-A B3 review r1; FIXED r2)*
+- **What happened:** review r1 REJECTED 3 LITERAL findings: the types test sat outside the `test/*.test.mjs` glob, so
+  `npm test` never ran it; the consumer test skipped when tsc was absent, so a tree without tsc passed; and mutant M04b
+  survived. r2 APPROVED.
+- **Root cause:** a gate that is not run, or that turns itself off when its tool is missing, reports green on a tree it
+  never checked (the same class as B1).
+- **Evidence:** .handoff/HISTORY.md (burst 3, G-A B3); .handoff/evidence/U4-GAB3-teeth.log, U4-GAB3r2-teeth.log
+  (gitignored run logs).
+- **Law:** law 4; suite law "Fail closed on every unverified state".
+- **Gate:** test/types.exports.test.mjs, test/types/consumer.local.mjs (tsc; LOCAL ONLY, outside the npm test glob, fails without tsc -- not a CI gate), test/spec.test.mjs (teeth M04..M32), and the
+  import globals check (C-32) in test/import.test.mjs.
+- **Reopens with:** a type gate moved outside the glob, or a test that can pass without running its tool.
+
+### B4. U3 E1: three fail-open input paths in the engine port *(FOUND 2026-11-24, U3 review r1; FIXED r2)*
+- **What happened:** review r1 REJECTED 3 LITERAL fail-opens in ABGate.js (rung E1): a stale gate-file module cache
+  against a fresh lane-sha256, and runGate options and gate-spec keys read through the prototype. Fixed in r2 with no
+  spec change (SPEC addendum A3): the gate file is imported by content hash (`?sha256=<laneSha>`) so lane-sha256 names
+  the spec that ran; runGate options and every gate-spec object must be plain objects (own keys only; prototype /
+  Symbol keys -> STOP CLI / STOP HARNESS).
+- **Root cause:** an import cache keyed by path let the lane sha and the code that ran differ; own-key reads were not
+  enforced on caller-supplied objects.
+- **Evidence:** .handoff/HISTORY.md (burst 2, U3); .handoff/lite-ab-gate/SPEC.md addendum A3; .handoff/evidence/
+  U3-*.log and U3r2-*.log (gitignored run logs).
+- **Law:** law 4; suite law "Options: a PLAIN object only".
+- **Gate:** test/spec.test.mjs ('defineGate: every object must be plain ...' and 'runGate: non-plain options ...') for the two prototype paths; the content-hash import has no standing test yet (one-off check (1) plus its must-fail on step copy ed6c1190 in .handoff/evidence/U3r2-targets.log).
+- **Reopens with:** a new input path that reads through the prototype, or an import that the content hash does not cover.
+
+### B5. U4-E2: the torture check lacked an isolating control, an independent baseline floor and a measured window *(FOUND 2026-11-24, U4-E2 review r1; FIXED r2)*
+- **What happened:** review r1 REJECTED 3 LITERAL findings in the rung E2 torture: the end TF check had no isolating
+  control; the baseline floor `> 0` was not independent; and a -1 sentinel was read as 0 B. r2 APPROVED. Only these
+  three findings are recorded in HISTORY; the fix detail is in the r2 logs.
+- **Root cause:** each check could pass without the thing it names being measured (a sentinel read as a clean 0).
+- **Evidence:** .handoff/HISTORY.md (burst 2, U4-E2); .handoff/evidence/U4E2r2-*.log (gitignored run logs).
+- **Law:** law 3 and law 4.
+- **Gate:** test/torture.mjs (T1 controls: boxed, tool-deopt, frozen-loop must read red).
+- **Reopens with:** a new torture row without a control that fails on that row alone.
+
 ## C. Measurements (this package's own runs on ABGate.js)
 
 (none yet)
