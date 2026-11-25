@@ -3,7 +3,7 @@
 > **Status: pre-1.0, version 0.0.0 (2026-11-24).** `@zakkster/lite-ab-gate`: the reusable STATISTICAL
 > timing A/B gate, extracted from LiteBisect `bench/ab-gate.mjs` 7e0f9262 and proven on the prototype
 > ab-proto 74f1a3d4. The program spec lives in `.handoff/lite-ab-gate/SPEC.md` (gitignored), so its
-> binding rules are restated below. **LEDGER.md** holds the laws and research entries X1-X5;
+> binding rules are restated below. **LEDGER.md** holds the laws and research entries X1-X6;
 > **RESEARCH.md** holds the research section.
 
 ## 1. Verification tier and host
@@ -18,7 +18,7 @@
   (`node ~/.claude/hooks/quiet-lock.mjs run "<what>" -- <cmd>`; `--strict` for a release-gating timing).
 - U9 statistical re-proof of the hoisted timed loop vs frozen ab-proto 74f1a3d4 is REQUIRED before 1.0 (C-23).
 
-## 2. SETTLED (binding for every agent; C-1..C-33)
+## 2. SETTLED (binding for every agent; C-1..C-34)
 
 C-3, C-13, C-14 and C-16 rest on suite law or R1 findings, and C-18..C-21 and C-29 are orchestrator / planner
 reconciliations; the other rows are maintainer rulings (the Q-id, where one exists, and the option label are in the SPEC).
@@ -35,7 +35,8 @@ reconciliations; the other rows are maintainer rulings (the Q-id, where one exis
 - C-7 HOST (Q-HOST (a) + Q-HOST-REPAIR "Drop re-pairing, plan it"): hosted verdict; the per-run A/A twin
   is the noise gate; one re-dispatch of a NO VERDICT run is allowed. In-job re-pairing was dropped: no
   code path, flag, option or doc re-runs a VOID lane inside a run. R2b is CLOSED unrun.
-- C-8 AAJUDGE (Q-AAJUDGE (a)): the A/A band is a validity gate (VOID AA-DRIFT); "judge both B/A and B/AA" is not a tool rule.
+- C-8 AAJUDGE (Q-AAJUDGE (a)): the A/A band is a validity gate (VOID AA-DRIFT); "judge both B/A and B/AA" is not a
+  tool rule.
 - C-9 MIGRATE (Q-MIGRATE (a)): nothing in this program edits LiteBisect; the judge must reproduce
   ab-gate 7e0f9262's VERDICT / REPORTED / exit bytes for an ab-gate-shaped log given LiteBisect's lanes /
   gated / shape as declared data.
@@ -87,18 +88,26 @@ reconciliations; the other rows are maintainer rulings (the Q-id, where one exis
 - C-30 SELFTEST FROZEN-ONLY (Q-SELFTEST-LIVE (a) "Proven n/a row", maintainer 2026-11-24): when no frozen entry
   binds live, the --selftest live-drift row prints 'n/a (frozen only)' and does not fail, but ONLY if the frozen-only
   HEADER line ('live not bound (frozen only)') is present in the same run (else the row fails); a gate with a live
-  binding runs the row as today (must-fail: n/a without the HEADER line = red). examples/ab.gate.mjs stays frozen-only (C-24 unchanged).
+  binding runs the row as today (must-fail: n/a without the HEADER line = red). examples/ab.gate.mjs stays frozen-only
+  (C-24 unchanged).
 - C-31 TORTURE NODE (Q-TORTURE-NODE (a) "Torture on node >= 26 only", maintainer 2026-11-24): on Node 22
   performance.now() boxes 16 B per read, so the zero-tool-bytes WINDOW row cannot hold there. ci.yml runs npm test on
   node 22 / 24 / 26 but `npm run torture` only on the node 26 legs; test/torture.mjs exits 1 (never skips) on node < 26;
-  the zero-tool-bytes claim is scoped to node >= 26; engines stays >= 22; the verdict host pin (AB_NODE 26.8.2) is unchanged.
+  the zero-tool-bytes claim is scoped to node >= 26; engines stays >= 22; the verdict host pin (AB_NODE 26.8.2) is
+  unchanged.
 - C-32 IMPORT-TEST OWNER (maintainer 2026-11-25, burst 3 "Helper adds it now"): the G-A B3 helper adds the
   import-adds-0-globalThis-keys check (+ its must-fail) to test/import.test.mjs; amends C-29 (afterwards the U10 docs
   batch is again the file's only editor).
-- C-33 LANESHA (Q-LANESHA (a) "Require in tool dialect", maintainer 2026-11-25): in the tool dialect (dialect omitted) judgeSpec THROWS
-  when laneSha is missing / undefined / null or not 64 lowercase hex; verdictOf returns code 2 (NO VERDICT) for a
+- C-33 LANESHA (Q-LANESHA (a) "Require in tool dialect", maintainer 2026-11-25): in the tool dialect (dialect omitted)
+  judgeSpec THROWS when laneSha is missing / undefined / null or not 64 lowercase hex; verdictOf returns code 2 (NO
+  VERDICT) for a
   tool-dialect spec with a bad laneSha; the legacy 'ab-gate@7e0f9262' dialect ignores laneSha (C-27); the d.ts keeps
-  `laneSha?` optional at type level; its doc says 'required in the tool dialect (C-33); judgeSpec throws if omitted' (supersedes 'Omit = not checked').
+  `laneSha?` optional at type level; its doc says 'required in the tool dialect (C-33); judgeSpec throws if omitted'
+  (supersedes 'Omit = not checked').
+- C-34 RAW / WARM AB (Q-WARMAB (a) "WARM mirrors AB", maintainer 2026-11-25; SPEC A7): tool dialect only (legacy
+  unchanged). The AB rule of C-11 holds on RESULT, RAW and WARM: reps differ -> all three carry AB (RAW AB exactly K
+  values, C-28); reps equal -> none does; every RAW value must parse as a finite number; any violation -> NO VERDICT
+  (code 2). To be implemented by unit U5b (burst 5).
 
 Open maintainer questions: none.
 
@@ -106,10 +115,12 @@ Open maintainer questions: none.
 
 Main-file rungs E1 -> E2 -> J1 -> J2 are sequential; each unit = coder batch + review.
 
-- U1: G-C B0 TASK 0 scaffold (coder: package.json, lockfile, .gitignore, LICENSE.txt, CHANGELOG skeleton, research/, .handoff/golden/); G-C B1 ledger / roadmap / research (helper, parallel).
+- U1: G-C B0 TASK 0 scaffold (coder: package.json, lockfile, .gitignore, LICENSE.txt, CHANGELOG skeleton, research/,
+  .handoff/golden/); G-C B1 ledger / roadmap / research (helper, parallel).
 - U2: G-A B0 fixtures + goldens + census (coder); G-B B0 ab-gate golden cut (coder, parallel).
 - U3: G-A B1 = rung E1 port-base (coder; ABGate.js).
-- U4: G-A B2 = rung E2 timedRounds + torture (coder); G-A B3 d.ts + spec / parity tests (helper); G-C B2 template + workflows + example (coder); G-B B3 judge rows test (helper).
+- U4: G-A B2 = rung E2 timedRounds + torture (coder); G-A B3 d.ts + spec / parity tests (helper); G-C B2 template +
+  workflows + example (coder); G-B B3 judge rows test (helper).
 - U5: G-B B1 = rung J1 judge (coder; judge region, parity.abgate test, d.ts delta).
 - U6: G-B B2 = rung J2 selftest, untimed (coder).
 - U7: G-B B4 mutants + full npm test (coder; torture row).

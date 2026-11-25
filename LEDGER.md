@@ -217,6 +217,26 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   conditional draw.
 - **Reopens with:** an R2b v3 rule whose review finds no outcome without a mapping and no clause that cannot fire.
 
+### X6. ab-proto's old gcWindow closure allocates 2688 x (K + 1) B (the window reads 3000 + 2688 x (K + 1) B): 224 B per live entry per round *(MEASURED 2026-11-24, U2 G-A B0 census (b); REPORTED allocation COUNTS on the PROTOTYPE, not on ABGate.js; local, QUIET per the census, not --strict)*
+- **What happened:** an instrumented copy of the frozen ab-proto (74f1a3d4 -> scratch copy fcf9688b; 3-line patch)
+  read new-space used size around `fn()` inside gcWindow on `toy:clean` (12 live entries per round, K + 1 rounds). The
+  K = 1, 3, 7, 11 points fit `bytes = 3000 + 2688 x (K + 1)` exactly: slope 2688 B per round = 224 B per live entry
+  per round (the entry's timed call AND its per-round optStatus tier poll; the census does not split the two),
+  intercept 3000 B = the measurement's own cost. K = 3 read 13752 B in 3 of 3 runs, 0 scavenges; K = 11 reads 35256 B.
+  The closure runs unoptimized, so its doubles box. Companion count (census (a)): `performance.now()` into a
+  Float64Array slot in a TurboFan loop reads 0 B per 1e5 calls on node v26.8.2; the boxed control (PACKED array) reads
+  15.9996 B per call, so the window sees a box.
+- **Reason:** this is the must-fail baseline for C-23: the hoisted timed loop must read 0 tool bytes against it.
+- **Evidence:** .handoff/evidence/U2-GA-census.md, U2-GA-census-b-1.log, -2, -3, -K1, -K7, -K11 (6 runs), census-a.log
+  (gitignored run logs). Provenance as the census states it: darwin arm64, Apple M4 Pro, node v26.8.2 (v8
+  14.6.202.34-node.28), 2026-11-24 05:59-06:00 UTC, quiet-lock run (no --strict), host verdict QUIET, load1 per run:
+  b-1/-2/-3 1.44, K1 1.82, K7 1.76, K11 1.76, census-a 1.44, baseline 2.21, busy-node none. Provenance: incomplete --
+  missing:
+  the hosted / x86 result, and any run on ABGate.js.
+- **Law:** law 3 (an allocation gate must be able to see the box); law 4 (the baseline is a must-fail control).
+- **Reopens with:** a C entry re-measuring the window on ABGate.js; a node / V8 where census (a) reads > 0 B
+  (e.g. node 22, C-31) or the per-entry bytes change.
+
 ---
 
 ## A. Designs refused or parked
@@ -256,7 +276,8 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Evidence:** .handoff/HISTORY.md (burst 3, G-A B3); .handoff/evidence/U4-GAB3-teeth.log, U4-GAB3r2-teeth.log
   (gitignored run logs).
 - **Law:** law 4; suite law "Fail closed on every unverified state".
-- **Gate:** test/types.exports.test.mjs, test/types/consumer.local.mjs (tsc; LOCAL ONLY, outside the npm test glob, fails without tsc -- not a CI gate), test/spec.test.mjs (teeth M04..M32), and the
+- **Gate:** test/types.exports.test.mjs, test/types/consumer.local.mjs (tsc; LOCAL ONLY, outside the npm test glob,
+  fails without tsc -- not a CI gate), test/spec.test.mjs (teeth M04..M32), and the
   import globals check (C-32) in test/import.test.mjs.
 - **Reopens with:** a type gate moved outside the glob, or a test that can pass without running its tool.
 
@@ -271,7 +292,9 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Evidence:** .handoff/HISTORY.md (burst 2, U3); .handoff/lite-ab-gate/SPEC.md addendum A3; .handoff/evidence/
   U3-*.log and U3r2-*.log (gitignored run logs).
 - **Law:** law 4; suite law "Options: a PLAIN object only".
-- **Gate:** test/spec.test.mjs ('defineGate: every object must be plain ...' and 'runGate: non-plain options ...') for the two prototype paths; the content-hash import has no standing test yet (one-off check (1) plus its must-fail on step copy ed6c1190 in .handoff/evidence/U3r2-targets.log).
+- **Gate:** test/spec.test.mjs ('defineGate: every object must be plain ...' and 'runGate: non-plain options ...') for
+  the two prototype paths; the content-hash import has no standing test yet (one-off check (1) plus its must-fail on
+  step copy ed6c1190 in .handoff/evidence/U3r2-targets.log).
 - **Reopens with:** a new input path that reads through the prototype, or an import that the content hash does not cover.
 
 ### B5. U4-E2: the torture check lacked an isolating control, an independent baseline floor and a measured window *(FOUND 2026-11-24, U4-E2 review r1; FIXED r2)*
@@ -284,10 +307,71 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Gate:** test/torture.mjs (T1 controls: boxed, tool-deopt, frozen-loop must read red).
 - **Reopens with:** a new torture row without a control that fails on that row alone.
 
+### B6. U2 r1: mask.mjs masked an all-NaN run equal and over-masked the PROV grammar *(FOUND 2026-11-24, U2 review r1; FIXED in the literal fix round, re-review APPROVED)*
+- **What happened:** review r1 REJECTED the golden mask (test/fixtures/golden/mask.mjs): an all-NaN run and three PROV
+  mutants masked equal to the golden. Fixed: mask.mjs masks values only, non-finite values and PROV grammar stay
+  visible; mask teeth 18 / 18 per the U2 commit message.
+- **Root cause:** a mask that hides too much turns a comparison into one that cannot see NaN or a broken PROV line
+  (null is not zero).
+- **Evidence:** .handoff/HISTORY.md (burst 1, U2); .handoff/COMMIT_MSG-U2.txt; .handoff/evidence/
+  U2-GA-mask-teeth.log (r1 run, 14 cases), U2-GA-fix1.log (fix round, 18 / 18 incl. all-NaN + 3 PROV rows; mask.mjs
+  3bce8fbe -> dadc6cfc) (gitignored). Details of the r1 findings beyond these two are not recorded in HISTORY.
+- **Law:** law 4; suite law "Fail closed on every unverified state".
+- **Gate:** none yet as a standing test: the 18-row mask teeth run is one-off (U2-GA-fix1.log);
+  test/parity.proto.test.mjs has no NaN / PROV row.
+- **Reopens with:** a new value kind or line the mask hides without a mutant that differs.
+
+### B7. U5 r1: judgeSpec / verdictOf read options through the prototype chain, so Object.prototype.dialect flipped the CLI judge to legacy *(FOUND 2026-11-25, U5 review r1; FIXED r2)*
+- **What happened:** review r1 REJECTED 1 LITERAL fail-open in the J1 judge: the dialect key was read through the
+  prototype, so `Object.prototype.dialect` made the CLI judge run the legacy dialect (which skips the 4 tool-only
+  checks, C-27). r2 APPROVED (937a15a5).
+- **Root cause:** own-key reads were not enforced on the judge's options (the same class as B4).
+- **Evidence:** .handoff/HISTORY.md (burst 4, U5); .handoff/evidence/U5r2-diff.log,
+  U5r2-parity-abgate.log, U5r2-teeth-preFix.log (gitignored).
+- **Law:** law 4; suite law "Options: a PLAIN object only".
+- **Gate:** test/parity.abgate.test.mjs 'r2 own keys only: a polluted Object.prototype.dialect never flips the tool
+  dialect to legacy (C-27 / C-33)' (must-fail: U5r2-teeth-preFix.log).
+- **Reopens with:** another judge input read through the prototype.
+
+### B8. U6 r1: `ran === total` in the untimed selftest had no must-fail control *(FOUND 2026-11-25, U6 review r1; FIXED r2)*
+- **What happened:** review r1 REJECTED 1 LITERAL: the --selftest-untimed check that every row ran (`ran === total`)
+  had no control that fails on that check alone. r2 APPROVED (d4991c39).
+- **Root cause:** a completeness check with no must-fail control could pass without counting anything.
+- **Evidence:** .handoff/HISTORY.md (burst 4, U6); .handoff/evidence/U6r2-teeth.log,
+  U6r2-test.log (gitignored).
+- **Law:** law 4 (every checker row has a control that fails on that row alone).
+- **Gate:** test/selftest.untimed.test.mjs 'ran === total must-fail: a build that drops one untimed row (allocBop)
+  reads "ran 66 of 67 cases -> FAIL", exit 1' (must-fail: U6r2-teeth.log; it is the killer of the test/mutants.json
+  ran === total mutant).
+- **Reopens with:** a selftest count or completeness check added without its own must-fail.
+
+### B9. U7: 4 RAW / WARM AB gaps in the J1 judge, 3 confirmed fail-opens plus the WARM AB / A rule *(FOUND 2026-11-25, U7; ruled C-34 / A7; FIX = U5b, burst 5 -- status: fix in progress, not yet approved)*
+- **What happened:** the U7 coder found, and the U7 reviewer confirmed, 4 gaps in the J1 judge: RAW AB missing with
+  reps differing; a non-numeric RAW value; RAW AB present with equal reps (3 confirmed fail-opens); and the WARM AB / A
+  rule, which the maintainer ruled in Q-WARMAB (a) "WARM mirrors AB". C-34: in the tool dialect the AB column rule
+  of C-11 holds on RESULT, RAW and WARM, RAW AB has exactly K values, every RAW value parses as a finite number; a
+  violation -> NO VERDICT (code 2).
+- **Root cause:** the AB rule was checked on the RESULT line only; RAW and WARM were not held to it, and RAW values
+  were not required to be numeric.
+- **Evidence:** .handoff/HISTORY.md (burst 4, U7); .handoff/lite-ab-gate/SPEC.md C-34, addendum A7.
+- **Law:** law 4; suite law "null is not zero".
+- **Gate:** none yet (U5b adds the rows and must-fails).
+- **Reopens with:** U5b review APPROVED closes this entry; a RAW / WARM shape the C-34 rule does not reject reopens it.
+
 ## C. Measurements (this package's own runs on ABGate.js)
 
 (none yet)
 
 ## D. Process lessons
 
-(none yet)
+### D1. A6 "no row changes" was asserted without grepping the oracle's API test *(FOUND 2026-11-25, U5 pre-coder / review r1; CORRECTED in SPEC A6; process)*
+- **What happened:** SPEC addendum A6 (C-33, laneSha required in the tool dialect) said no oracle row changes. That was
+  false: the oracle row 'judgeSpec throws on bad input' built its ok spec without laneSha, so under C-33 it would
+  throw. The U5 reviewer ruled the row wrong and approved the one-line fix (ok gains laneSha: SHA); oracle d17e8ea6 ->
+  3296ca10.
+- **Root cause:** a contract change was declared to leave the oracle untouched without grepping the oracle's API test
+  for every spec it builds.
+- **Evidence:** .handoff/lite-ab-gate/SPEC.md addendum A6 (CORRECTION); .handoff/HISTORY.md (burst 4).
+- **Law:** none new (law 4: the oracle is read, not assumed).
+- **Gate:** none (process): a spec change that tightens an input names the oracle rows that build that input, by grep.
+- **Reopens with:** a second spec change found to break an oracle row it said it left alone.
