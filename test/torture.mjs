@@ -210,6 +210,123 @@ const t2c = await retention(true);
 const keepRed = t2c.size === CYCLES;
 row(keepRed, 'T2 control retained (must read red)', 'outs kept in an array: tracker.size()=' + t2c.size + ' (want ' + CYCLES + ') -> ' + (keepRed ? 'red' : 'NOT RED'));
 
+// ---- A5 (G-B B4, plan-GB ASSERTION A5): allocRow + judge retention over the 114 judge rows -------------------------
+// DETERMINISTIC count rows (no timing claim). (a) allocRow, read from the tool's own `--selftest-untimed` allocBop row
+//   (allocRow is module-private): the scavenging window reads Infinity, the clean window a finite B/op in [0, 1/64),
+//   and the tool's own exact check printed `-> ok`. (b) 200 cycles x 114 rows = verdictOf on the 55 golden parity rows
+//   (legacy dialect, logs rebuilt with ab-gate 7e0f9262's applyMut and checked against golden textSha) + the 59
+//   judge.rows rows (tool dialect; the table is sliced from test/judge.rows.test.mjs, never retyped): every result
+//   tracked by lite-leak (cleanup null, tag a string: neither closes over the result) -> tracker.size() === 0 after GC;
+//   every code equals its row's expected exit; the judge writes nothing (stdout / stderr write calls during the loop 0:
+//   ab-proto's module LOG became per-run ctx.log, verdictOf has no log) and leaves every input LOG (lines array)
+//   unchanged in length and content. Must-fail control: the same loop keeping every result -> size() === 22800.
+const A5_CYCLES = 200;
+const JL_GATE = join(HERE, 'fixtures', 'judge-lane', 'frozen-only.gate.mjs');
+const rs = child(TOOL, [JL_GATE, '--selftest-untimed'], {});
+const arLines = rs.text.split('\n').filter((l) => l.startsWith('SELFTEST allocBop: '));
+const arM = arLines.length === 1 ? /^SELFTEST allocBop: scavenging window (\S+) \(want Infinity\), clean window (\S+) \(want \[0, 1\/64\)\) -> (ok|FAIL)$/.exec(arLines[0]) : null;
+const arClean = arM === null ? NaN : Number(arM[2]);
+const arOk = arM !== null && arM[1] === 'Infinity' && /^\d+\.\d{4}$/.test(arM[2]) && arClean >= 0 && arClean < 0.015625 && arM[3] === 'ok';
+row(arOk, 'A5 allocRow', 'selftest-untimed exit ' + rs.code + ' allocBop rows ' + arLines.length + ' (want 1): ' + (arLines[0] || '(none)') +
+    ' -> scavenging ' + (arM ? arM[1] : '?') + ' (want Infinity), clean ' + arClean + ' (want [0, 0.015625)), tool check ' + (arM ? arM[3] : '?') + ' (want ok)');
+
+const { judgeSpec: jSpec, verdictOf: vOf } = await import(pathToFileURL(TOOL).href);
+const A5 = [];   // { spec, lines, code, name }
+let a5Build = '';
+if (typeof jSpec !== 'function' || typeof vOf !== 'function') a5Build = 'judgeSpec / verdictOf not exported by the tool under test';
+else {
+    // the 55 golden rows (applyMut: copied VERBATIM from LiteBisect bench/ab-gate.mjs sha256 7e0f9262..., as in
+    // test/parity.abgate.test.mjs; each mutated text must hash to the golden textSha)
+    const applyMut = (text, m) => {
+        if (m[0] === 'sub') {
+            const n = text.split(m[1]).length - 1;
+            return n === 1 ? text.replace(m[1], () => m[2]) : 'sub ' + JSON.stringify(m[1]) + ' matched ' + n + ' times (want 1)';
+        }
+        if (m[0] === 'append') return text.endsWith('\n') ? text + m[1] : 'append: fixture does not end in a newline';
+        const lines = text.split('\n');
+        const at = [];
+        for (let i = 0; i < lines.length; i++) if (lines[i].startsWith(m[1])) at.push(i);
+        if (at.length !== 1) return m[0] + ' ' + JSON.stringify(m[1]) + ' matched ' + at.length + ' lines (want 1)';
+        if (m[0] === 'drop') lines.splice(at[0], 1);
+        else if (m[0] === 'dup') lines.splice(at[0], 0, lines[at[0]]);
+        else return 'unknown mutation ' + m[0];
+        return lines.join('\n');
+    };
+    const GD = join(HERE, 'fixtures', 'ab-gate-7e0f9262');
+    const G = JSON.parse(readFileSync(join(GD, 'golden.json'), 'utf8'));
+    const FX = { ubuntu: readFileSync(join(GD, 'r4-ubuntu-rung-all.log'), 'utf8'), macos: readFileSync(join(GD, 'r4-macos-rung-all.log'), 'utf8') };
+    const legacy = jSpec({ laneIds: G.spec.laneIds, gated: G.spec.gated, shape: G.spec.shape, K: G.spec.K, C: G.spec.C, dialect: 'ab-gate@7e0f9262' });
+    let shaBad = 0;
+    for (const r of G.rows) {
+        let text = FX[r.base];
+        for (const m of r.muts) text = applyMut(text, m);
+        if (sha256(text) !== r.textSha) shaBad++;
+        const ls = text.split('\n');
+        if (ls.length > 0 && ls[ls.length - 1] === '') ls.pop();
+        A5.push({ spec: legacy, lines: ls, code: r.code, name: r.id });
+    }
+    // the 59 judge.rows rows: the table text from 'const K = 11, C = 3;' to the end of its ROWS array, evaluated with the
+    // tool's judgeSpec (ab-gate between() style; both markers must occur exactly once)
+    const jr = readFileSync(join(HERE, 'judge.rows.test.mjs'), 'utf8');
+    const ja = jr.indexOf('const K = 11, C = 3;'), jROWS = jr.indexOf('const ROWS = [');
+    const jz = jROWS < 0 ? -1 : jr.indexOf('\n];\n', jROWS);
+    let J = null;
+    if (ja < 0 || jr.indexOf('const K = 11, C = 3;', ja + 1) >= 0 || jROWS < ja || jr.indexOf('const ROWS = [', jROWS + 1) >= 0 || jz < 0) a5Build = 'judge.rows table markers not found exactly once';
+    else J = new Function('judgeSpec', jr.slice(ja, jz + 3) + '\nreturn { ROWS, SPEC, lines };')(jSpec);
+    if (shaBad > 0) a5Build += (a5Build ? '; ' : '') + shaBad + ' golden textSha mismatch(es)';
+    if (J !== null) {
+        const tool = J.SPEC();
+        for (const [name, mk, exit] of J.ROWS) {
+            // the belt row (mk null): the clean log under a hand-built spec whose gated is {} (C-14), as judge.rows builds it
+            if (mk === null) A5.push({ spec: { ...tool, gated: {} }, lines: J.lines(), code: exit, name });
+            else A5.push({ spec: tool, lines: mk(), code: exit, name });
+        }
+    }
+    if (A5.length !== 114) a5Build += (a5Build ? '; ' : '') + A5.length + ' rows built (want 114 = 55 golden + 59 judge.rows)';
+}
+const a5Snap = A5.map((x) => ({ n: x.lines.length, h: sha256(x.lines.join('\n')) }));
+async function judgeRetention(keep) {
+    const tracker = createLeakTracker({ name: keep ? 'ab-gate-judge-keep' : 'ab-gate-judge', onLeak: () => {}, onWarning: (w) => warns.push(w.kind + ':' + w.reason) });
+    tracker.registerKernel(createOwnerCascadeOrphanKernel());
+    const kept = [];
+    let wrong = 0, writes = 0, tracked = 0;
+    // one cycle per call: each result lives only in this frame (never in the loop's suspended registers)
+    const cycle = (c) => {
+        for (let i = 0; i < A5.length; i++) {
+            const v = vOf(A5[i].spec, A5[i].lines);
+            if (v.code !== A5[i].code) wrong++;
+            tracker.track(v, null, 'v#' + c + ':' + i);
+            tracked++;
+            if (keep) kept.push(v);
+        }
+    };
+    const ow = process.stdout.write, ew = process.stderr.write;
+    process.stdout.write = function (...a) { writes++; return ow.apply(this, a); };
+    process.stderr.write = function (...a) { writes++; return ew.apply(this, a); };
+    try {
+        for (let c = 0; c < A5_CYCLES; c++) cycle(c);
+    } finally {
+        process.stdout.write = ow;
+        process.stderr.write = ew;
+    }
+    for (let a = 0; a < 20 && tracker.size() > 0; a++) { globalThis.gc(); await settle(20); }
+    const size = tracker.size(), findings = tracker.audit().length;
+    kept.length = 0;
+    const changed = A5.filter((x, i) => x.lines.length !== a5Snap[i].n || sha256(x.lines.join('\n')) !== a5Snap[i].h).length;
+    return { size, findings, wrong, writes, tracked, changed };
+}
+const A5_WANT = A5_CYCLES * 114;
+if (a5Build !== '') row(false, 'A5 judge retention', 'rows not built: ' + a5Build);
+else {
+    const a5 = await judgeRetention(false);
+    row(a5.size === 0 && a5.findings === 0 && a5.wrong === 0 && a5.writes === 0 && a5.changed === 0 && a5.tracked === A5_WANT, 'A5 judge retention',
+        A5_CYCLES + ' cycles x ' + A5.length + ' rows (55 golden legacy + 59 judge.rows tool): tracked ' + a5.tracked + ' (want ' + A5_WANT + ') tracker.size()=' + a5.size +
+        ' (want 0) findings=' + a5.findings + ' codes off ' + a5.wrong + ' (want 0) writes during verdictOf ' + a5.writes + ' (want 0) input LOGs changed ' + a5.changed + ' (want 0)');
+    const a5c = await judgeRetention(true);
+    const a5Red = a5c.size === A5_WANT;
+    row(a5Red, 'A5 control retained (must read red)', 'results kept in an array: tracker.size()=' + a5c.size + ' (want ' + A5_WANT + ') -> ' + (a5Red ? 'red' : 'NOT RED'));
+}
+
 // ---- GATE ----------------------------------------------------------------------------------------------------------
 const failed = rows.filter((r) => !r.ok);
 const alloc = entriesSeen > 0 && Number.isFinite(maxBytes) ? maxBytes / ((K + 1) * entriesSeen) : NaN;

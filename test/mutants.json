@@ -1,0 +1,435 @@
+{
+  "note": "U7 / G-B B4 (plan-GB TASK 8, ASSERTION A3). Each mutant: an EXACT-ONCE replacement (find -> replace) in a temp copy of ABGate.js; files = the test files that must turn >= 1 test red (default: the 114 judge rows + their API tests + judge.extra). A3 note, recorded honestly: \"proto 74f1a3d4's judge reads PASS on the forged-AB row\" is FALSE -- that row (reps A:4,B:1,AB:1/4) is green on E1 because the reps regex is anchored; C11h unanchors it to show the row has teeth.",
+  "mutants": [
+    {
+      "id": "F1-wordMedHi",
+      "group": "r0-flip",
+      "why": "C-5: SLOWER needs median > band hi; >= flips the B6 boundary (median exactly 1.050)",
+      "find": "function wordG(s) {\n    if (!Number.isFinite(s.med)) return 'NONE';\n    if (s.med > AA_HI && s.q1 > 1) return 'SLOWER';\n    if (s.med < AA_LO && s.q3 < 1) return 'FASTER';",
+      "replace": "function wordG(s) {\n    if (!Number.isFinite(s.med)) return 'NONE';\n    if (s.med >= AA_HI && s.q1 > 1) return 'SLOWER';\n    if (s.med < AA_LO && s.q3 < 1) return 'FASTER';",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "F2-wordQ1",
+      "group": "r0-flip",
+      "why": "C-5: SLOWER needs q1 > 1; >= flips the B7 boundary (q1 exactly 1.000)",
+      "find": "function wordG(s) {\n    if (!Number.isFinite(s.med)) return 'NONE';\n    if (s.med > AA_HI && s.q1 > 1) return 'SLOWER';\n    if (s.med < AA_LO && s.q3 < 1) return 'FASTER';",
+      "replace": "function wordG(s) {\n    if (!Number.isFinite(s.med)) return 'NONE';\n    if (s.med > AA_HI && s.q1 >= 1) return 'SLOWER';\n    if (s.med < AA_LO && s.q3 < 1) return 'FASTER';",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "F3-wordMedLo",
+      "group": "r0-flip",
+      "why": "C-5: FASTER needs median < band lo; <= flips the B8 boundary (median exactly 0.950)",
+      "find": "function wordG(s) {\n    if (!Number.isFinite(s.med)) return 'NONE';\n    if (s.med > AA_HI && s.q1 > 1) return 'SLOWER';\n    if (s.med < AA_LO && s.q3 < 1) return 'FASTER';",
+      "replace": "function wordG(s) {\n    if (!Number.isFinite(s.med)) return 'NONE';\n    if (s.med > AA_HI && s.q1 > 1) return 'SLOWER';\n    if (s.med <= AA_LO && s.q3 < 1) return 'FASTER';",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "F4-wordQ3",
+      "group": "r0-flip",
+      "why": "C-5: FASTER needs q3 < 1; <= flips the B9 boundary (q3 exactly 1.000)",
+      "find": "function wordG(s) {\n    if (!Number.isFinite(s.med)) return 'NONE';\n    if (s.med > AA_HI && s.q1 > 1) return 'SLOWER';\n    if (s.med < AA_LO && s.q3 < 1) return 'FASTER';",
+      "replace": "function wordG(s) {\n    if (!Number.isFinite(s.med)) return 'NONE';\n    if (s.med > AA_HI && s.q1 > 1) return 'SLOWER';\n    if (s.med < AA_LO && s.q3 <= 1) return 'FASTER';",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "F5-aaBand",
+      "group": "r0-flip",
+      "why": "C-4 / C-8: the A/A band is closed [0.95, 1.05]; an open band flips B1 / B2",
+      "find": "else if (!(aa.med >= AA_LO && aa.med <= AA_HI))",
+      "replace": "else if (!(aa.med > AA_LO && aa.med < AA_HI))",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "F6-slowMed",
+      "group": "r0-flip",
+      "why": "C-4: SLOW needs median > 1.25; >= flips B3 (median exactly 1.250)",
+      "find": "else if (!(slow.med > SLOW_MED && slow.q1 > SLOW_Q1))",
+      "replace": "else if (!(slow.med >= SLOW_MED && slow.q1 > SLOW_Q1))",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "F7-slowQ1",
+      "group": "r0-flip",
+      "why": "C-4: SLOW needs q1 > 1.10; >= flips B4 (q1 exactly 1.100)",
+      "find": "else if (!(slow.med > SLOW_MED && slow.q1 > SLOW_Q1))",
+      "replace": "else if (!(slow.med > SLOW_MED && slow.q1 >= SLOW_Q1))",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "F8-bopMax",
+      "group": "r0-flip",
+      "why": "C-4: B/op < 1/64; <= flips B5 (bop exactly 1/64)",
+      "find": "!(v < ALLOC_MAX)) bopOk = false;",
+      "replace": "!(v <= ALLOC_MAX)) bopOk = false;",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "F9-bopZero",
+      "group": "r0-flip",
+      "why": "B/op >= 0; > 0 flips B11 (bop exactly -0)",
+      "find": "else if (!(v >= 0)) neg.push(b);",
+      "replace": "else if (!(v > 0)) neg.push(b);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "F10-numInf",
+      "group": "r0-flip",
+      "why": "C-14: a literal Infinity is not a number token (B10 renders NaN, ab-gate bytes)",
+      "find": "const NUM_RE = /^-?\\d+(\\.\\d+)?$/;",
+      "replace": "const NUM_RE = /^-?(\\d+(\\.\\d+)?|Infinity)$/;",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C11a-ABrepsAtB",
+      "group": "C-11",
+      "why": "C-11: AB reps must equal B reps when reps differ (rows A:4,B:1,AB:4 and AB reps not printed)",
+      "find": "if (rm[3] === undefined || Number(rm[3]) !== Number(rm[2])) why.push(",
+      "replace": "if (false) why.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C11b-BABfinite",
+      "group": "C-11",
+      "why": "C-11: reps differ needs a finite B/AB (row (iii) B/AB missing, B/AB q3 NaN)",
+      "find": "if (!fin3(bab)) why.push(",
+      "replace": "if (false) why.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C11c-printedWordAB",
+      "group": "C-11",
+      "why": "C-11: the printed wordAB must equal the word B/AB reads (row (iv))",
+      "find": "if (pAB !== wab) why.push(",
+      "replace": "if (false) why.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C11d-repsDrift",
+      "group": "C-11",
+      "why": "C-11: B/A and B/AB words must agree, else REPS-DRIFT (rows (ii), (v))",
+      "find": "else if (wab !== w) why.push(",
+      "replace": "else if (false) why.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C11e-ABbop",
+      "group": "C-11",
+      "why": "C-11: reps differ adds an AB B/op entry (row: no AB bop; row (i) PASS needs AB accepted)",
+      "find": "cols = [...BOP_COLS, 'AB'];",
+      "replace": "cols = BOP_COLS;",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C11f-equalRepsNoAB",
+      "group": "C-11",
+      "why": "C-11: equal reps means no AB (row: equal reps with an AB reps field)",
+      "find": "} else if (rm[3] !== undefined) why.push(",
+      "replace": "} else if (false) why.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C11g-equalRepsNA",
+      "group": "C-11",
+      "why": "C-11: equal reps print ab / B/AB / wordAB as n/a (row: equal reps with a finite B/AB)",
+      "find": "if (field(line, k) !== 'n/a') why.push(",
+      "replace": "if (false) why.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C11h-repsAnchor",
+      "group": "C-11",
+      "why": "C-11: the reps field is exactly A:n,B:n[,AB:n] (row: forged AB:1/4; green on E1, see note)",
+      "find": "/^A:(\\d+),B:(\\d+)(?:,AB:(\\d+))?$/.exec(repsTxt)",
+      "replace": "/^A:(\\d+),B:(\\d+)(?:,AB:(\\d+))?/.exec(repsTxt)",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "W1-warmField",
+      "group": "C-12",
+      "why": "C-28: RESULT warm=1 required (rows warm=0, warm missing)",
+      "find": "if (wv !== '1') warmBad.push(",
+      "replace": "if (false) warmBad.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "W2-warmLine",
+      "group": "C-12",
+      "why": "C-28: one WARM line per lane (row: WARM line dropped)",
+      "find": "    wantOne(warm, 'WARM');\n",
+      "replace": "",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "W3-rawK",
+      "group": "C-12",
+      "why": "C-12 / C-28: RAW columns hold exactly K values, round 0 excluded (row: RAW with K+1 values)",
+      "find": "if (vs.length !== sp.K || vs.some((v) => v === ''))",
+      "replace": "if (vs.some((v) => v === ''))",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "H1-arch",
+      "group": "header-prov",
+      "why": "C-27 tool dialect: HEADER arch required (row: arch dropped)",
+      "find": "if (tool && m[4] === undefined) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "H2-node",
+      "group": "header-prov",
+      "why": "HEADER node required (row: node dropped)",
+      "find": "(TIMED|ORACLE-ONLY \\\\(no clock\\\\)) node (\\\\S+)(?: arch",
+      "replace": "(TIMED|ORACLE-ONLY \\\\(no clock\\\\))(?: node (\\\\S+))?(?: arch",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "H3-specLine",
+      "group": "header-prov",
+      "why": "C-27 / C-33: exactly one HEADER spec line (row: spec line dropped)",
+      "find": "if (specs.length !== 1) shape.push(specs.length + ' HEADER spec lines (want 1)');\n        else {",
+      "replace": "if (specs.length > 1) shape.push(specs.length + ' HEADER spec lines (want 1)');\n        else if (specs.length === 1) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "H4-laneSha",
+      "group": "header-prov",
+      "why": "C-33: lane-sha256 must equal the spec laneSha (row: foreign lane-sha256)",
+      "find": "else if (lsha !== laneSha) shape.push(",
+      "replace": "else if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "H5-transform",
+      "group": "header-prov",
+      "why": "C-27: HEADER spec transform= required (row: transform dropped)",
+      "find": "if (tr === null || !TR_RE.test(tr)) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "H6-provGrammar",
+      "group": "header-prov",
+      "why": "C-27 tool dialect: PROV start / end grammar (rows: PROV start load dropped, PROV end timestamp altered)",
+      "find": "if (pm === null || pm[1] !== tag || Number.isNaN(Date.parse(pm[2])) || new Date(pm[2]).toISOString() !== pm[2]) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "B1-belt",
+      "group": "belt",
+      "why": "C-14: an empty gated map is never PASS, in every dialect (belt row)",
+      "find": "Object.keys(sp.gated).length === 0) return 'gated is empty",
+      "replace": "Object.keys(sp.gated).length < 0) return 'gated is empty",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "D1-dialectLeak",
+      "group": "dialect",
+      "why": "C-27: the legacy dialect skips exactly the tool-only checks; a warm check leaking into it breaks the 55 golden rows",
+      "find": "    if (tool) warmShape(sp, lines, res, shape);\n",
+      "replace": "    warmShape(sp, lines, res, shape);\n",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "M14-provIsoRoundTrip",
+      "group": "u5-survivor",
+      "why": "PROV ISO time names a real instant (extra rows: 2026-02-30, 2026-11-31)",
+      "find": " || new Date(pm[2]).toISOString() !== pm[2]) shape.push(",
+      "replace": ") shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "M16-rawABcount",
+      "group": "u5-survivor",
+      "why": "C-11 + C-28: the RAW AB column holds exactly K values when reps differ (extra rows K+1, K-1)",
+      "find": "for (const c of ['B/A', 'AA', 'SLOW', 'AB'])",
+      "replace": "for (const c of ['B/A', 'AA', 'SLOW'])",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "M17a-warmHead",
+      "group": "u5-survivor",
+      "why": "C-12: the WARM line names round 0 (extra row: round 1)",
+      "find": "if (!l.startsWith(head) || !WARM_COLS_RE.test(",
+      "replace": "if (!WARM_COLS_RE.test(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "M17b-warmCols",
+      "group": "u5-survivor",
+      "why": "C-12 + C-28: the WARM line carries per-column ratios (extra row: no column ratios)",
+      "find": " || !WARM_COLS_RE.test(l.slice(head.length))) shape.push(",
+      "replace": ") shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "R2a-judgeSpecProtoLaneSha",
+      "group": "u5-survivor",
+      "why": "C-33: judgeSpec reads laneSha as an own key only (extra row: inherited Object.prototype.laneSha)",
+      "find": "shaIn = own('laneSha');",
+      "replace": "shaIn = o.laneSha;",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "R2b-beltProtoLaneSha",
+      "group": "u5-survivor",
+      "why": "C-33 belt: verdictOf reads laneSha as an own key only (extra row: belt with inherited laneSha)",
+      "find": "const ownLaneSha = (sp) => (Object.hasOwn(sp, 'laneSha') ? sp.laneSha : undefined);",
+      "replace": "const ownLaneSha = (sp) => sp.laneSha;",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "M2-ranTotal",
+      "group": "u6-runner",
+      "why": "plan-GB TASK 4 / A4: the selftest runner checks ran === total (killer: selftest.untimed \"ran === total must-fail\")",
+      "find": "    if (ran !== total) { bad++; say(ctx, 'SELFTEST ran ' + ran + ' of ' + total + ' cases -> FAIL'); }\n",
+      "replace": "",
+      "files": [
+        "test/selftest.untimed.test.mjs"
+      ]
+    }
+  ]
+}
