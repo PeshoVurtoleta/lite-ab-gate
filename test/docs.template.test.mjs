@@ -89,6 +89,94 @@ const OWN_GATE = 'examples/ab.gate.mjs';
 const CP_LINE = 'cp node_modules/@zakkster/lite-ab-gate/templates/ab.yml .github/workflows/ab.yml';
 const GATE_STEP = 'gate (--run ALL)';
 const IMAGEOS_LINE = '          : "${ImageOS:?unset}"';   // exact: ${ImageOS:-unset} would fail open on a runner with no image id
+// the runner-identity step, exact (FILL5): its whole run: block and its env, literal text (never derived from the file checked).
+// Nothing before / between / after: a line before the guard (e.g. ImageOS="${ImageOS:-unknown}") would make the :? guard never fire.
+const RUNID_STEP = 'runner identity';
+const RUNID_RUN = [
+    ': "${ImageOS:?unset}"',
+    'test "$RUNNER_ARCH" = "$WANT_ARCH"',
+    'case "$WANT_OS" in',
+    '  ubuntu-latest) test "$RUNNER_OS" = Linux ;;',
+    '  macos-latest) test "$RUNNER_OS" = macOS ;;',
+    '  *) echo "unexpected matrix os: $WANT_OS"; exit 1 ;;',
+    'esac',
+].join('\n');
+const RUNID_ENV = ['WANT_OS: ${{ matrix.os }}', 'WANT_ARCH: ${{ matrix.arch }}'];
+/** Problems of the runner-identity step in one workflow text: exactly one step, exact env keys, exact run: block. */
+function runnerIdProblems(f, t) {
+    const s = stepsOf(t).filter((x) => x.name === RUNID_STEP);
+    if (s.length !== 1) return [f + ': ' + s.length + ' steps named ' + RUNID_STEP + ' (want 1)'];
+    const p = [], ls = linesOf(s[0].text);
+    if (stepsOf(t)[0].name !== RUNID_STEP) p.push(f + ': step ' + RUNID_STEP + ' is not the first step');
+    // r3 blockers 1 + 2: first list item under steps: is runner identity; its YAML extent (comments never end it) has keys exactly env,run
+    const L = linesOf(t), isKey = (l) => l.trim() !== '' && !l.trim().startsWith('#'), si = L.indexOf('    steps:');
+    const first = si < 0 ? undefined : L.slice(si + 1).find(isKey);
+    if (first !== '      - name: ' + RUNID_STEP) p.push(f + ': the first item under steps: is not "- name: ' + RUNID_STEP + '": ' + JSON.stringify(first));
+    const a = L.indexOf('      - name: ' + RUNID_STEP); let b = a + 1;
+    while (b < L.length && !(isKey(L[b]) && indentOf(L[b]) <= 6)) b++;
+    const sk = a < 0 ? [] : L.slice(a + 1, b).filter((l) => isKey(l) && indentOf(l) < 10).map((l) => l.trim().replace(/:.*$/, ''));
+    if (sk.join(',') !== 'env,run') p.push(f + ': step ' + RUNID_STEP + ' keys ' + JSON.stringify(sk) + ' (want env,run)');
+    const runKeys = ls.filter((l) => /^\s*(?:- )?run\s*:/.test(l));
+    if (runKeys.length !== 1 || runKeys[0] !== '        run: |') p.push(f + ': step ' + RUNID_STEP + ' run key is not exactly "        run: |"');
+    const ei = ls.findIndex((l) => /^\s+env:\s*$/.test(l));
+    const env = [];
+    if (ei >= 0) for (let j = ei + 1; j < ls.length && (ls[j].trim() === '' || ls[j].trim().startsWith('#') || indentOf(ls[j]) > indentOf(ls[ei])); j++) if (ls[j].trim() !== '') env.push(ls[j].trim());
+    if (env.join('\n') !== RUNID_ENV.join('\n')) p.push(f + ': step ' + RUNID_STEP + ' env is not exactly WANT_OS / WANT_ARCH: ' + JSON.stringify(env));
+    const r = runBlocksOf(s[0].text);
+    if (r.length !== 1 || dedent(r[0].text) !== RUNID_RUN) p.push(f + ': step ' + RUNID_STEP + ' run: block is not the exact 7-line text');
+    return p;
+}
+// C-52: the job env's exact KEY set (values free: AB_TOOL differs between the template and the dogfood file); no top-level env:
+const JOB_ENV_KEYS = ['AB_GATE', 'AB_NODE', 'AB_TOOL', 'FLAGS'];
+const TOP_KEYS = 'name,on,permissions,defaults,jobs';
+function jobEnvProblems(f, t) {
+    const ls = linesOf(t), p = [];
+    // r2: an allowlist, not a denylist (escaped / explicit-key spellings of env must not slip through); literal, never derived
+    const top = ls.filter((l) => /^[^\s#]/.test(l)).map((l) => l.replace(/:.*$/, '')).join(',');
+    if (top !== TOP_KEYS) p.push(f + ': top-level keys ' + JSON.stringify(top) + ' (want ' + TOP_KEYS + ')');
+    // r3 blockers 3 + 4: printable ASCII + LF only (YAML also breaks lines on CR / NEL); defaults: block exact
+    const bad = /[^\n\x20-\x7e]/.exec(t);
+    if (bad !== null) p.push(f + ': char ' + JSON.stringify(bad[0]) + ' outside printable ASCII + LF (a YAML line break the line model cannot see)');
+    const di = ls.indexOf('defaults:'), dv = [];
+    for (let j = di + 1; di >= 0 && j < ls.length && !(ls[j].trim() !== '' && !ls[j].trim().startsWith('#') && indentOf(ls[j]) === 0); j++) if (ls[j].trim() !== '' && !ls[j].trim().startsWith('#')) dv.push(ls[j]);
+    if (dv.join('\n') !== '  run:\n    shell: bash') p.push(f + ': defaults: is not exactly run: shell: bash: ' + JSON.stringify(dv));
+    // precondition (no mutant possible: the second-env mutant is killed by the job-key / env-key rows first)
+    const at = ls.map((l, i) => (/^    env:\s*$/.test(l) ? i : -1)).filter((i) => i >= 0);
+    if (at.length !== 1) return p.concat(f + ': ' + at.length + ' job env: blocks (want 1)');
+    const keys = [];
+    for (let j = at[0] + 1; j < ls.length && (ls[j].trim() === '' || ls[j].trim().startsWith('#') || indentOf(ls[j]) > 4); j++) {
+        if (ls[j].trim() === '' || ls[j].trim().startsWith('#')) continue;
+        if (indentOf(ls[j]) !== 6) continue;   // a continuation, not a key
+        const m = /^\s+([^:]*):/.exec(ls[j]);
+        keys.push(m === null ? ls[j].trim() : m[1]);
+    }
+    if (keys.join(',') !== JOB_ENV_KEYS.join(',')) p.push(f + ': job env keys ' + JSON.stringify(keys) + ' != ' + JSON.stringify(JOB_ENV_KEYS));
+    return p;
+}
+// C-53 JOBKEYS: the jobs map holds exactly one job `ab`; its key set is exactly the literal list below (sorted compare); runs-on is
+// exactly `${{ matrix.os }}`. So container / services / self-hosted routes cannot set ImageOS ahead of the guard.
+const JOB_KEYS = ['env', 'name', 'runs-on', 'steps', 'strategy', 'timeout-minutes'];
+const RUNS_ON_LINE = '    runs-on: ${{ matrix.os }}';
+function jobKeyProblems(f, t) {
+    const ls = linesOf(t), p = [];
+    const ji = ls.indexOf('jobs:');
+    if (ji < 0) return [f + ': no jobs: key'];
+    const jobs = [], keys = [];
+    let inAb = false;
+    for (let j = ji + 1; j < ls.length; j++) {
+        const l = ls[j], tr = l.trim();
+        if (tr === '' || tr.startsWith('#')) continue;
+        const ind = indentOf(l);
+        if (ind === 0) break;
+        const m = /^\s*([^:]*):/.exec(l);
+        const k = m === null ? tr : m[1];
+        if (ind === 2) { jobs.push(k); inAb = k === 'ab'; }
+        else if (ind === 4 && inAb) { keys.push(k); if (k === 'runs-on' && l !== RUNS_ON_LINE) p.push(f + ': job ab runs-on is not exactly "' + RUNS_ON_LINE.trim() + '": ' + JSON.stringify(l)); }
+    }
+    if (jobs.join(',') !== 'ab') p.push(f + ': jobs ' + JSON.stringify(jobs) + ' (want exactly ab)');
+    if (keys.slice().sort().join(',') !== JOB_KEYS.join(',')) p.push(f + ': job ab keys ' + JSON.stringify(keys) + ' (want ' + JOB_KEYS.join(',') + ')');
+    return p;
+}
 // the timed-case count the selftest must report (ABGate.js selftest's summary line), as a POSIX ERE that JS reads alike;
 // accepts the timed run, rejects the untimed-only form and timed 0 (stopgate + the static row below)
 const COUNT_ERE = 'SELFTEST ran [0-9]+ of [0-9]+ \\(untimed [0-9]+, timed [1-9][0-9]*\\)';
@@ -323,6 +411,7 @@ const CHECKS = {
             const n = linesOf(t).filter((l) => l === IMAGEOS_LINE).length;
             if (n !== 1) p.push(f + ': ' + n + ' exact ImageOS guard lines (want 1): ' + IMAGEOS_LINE.trim());
         }
+        for (const [f, t] of WFS(w)) p.push(...runnerIdProblems(f, t), ...jobEnvProblems(f, t), ...jobKeyProblems(f, t));
         for (const [f, t] of WFS(w)) {
             const st = stepsOf(t);
             const si = st.findIndex((s) => s.name === 'selftest'), gi = st.findIndex((s) => s.name === GATE_STEP);
@@ -467,6 +556,35 @@ const MUTANTS = [
     ['M35 (E3) ImageOS guard :- instead of :?', 'failclosed', mutant('both', IMAGEOS_LINE + '\n', '          : "${ImageOS:-unset}"\n')],
     ['M36 comment-less fail-open selftest line after the block', 'stopgate', mutant('both', "              echo 'selftest: red or not run -> STOP -> NO VERDICT, never host evidence'\n            fi\n", "              echo 'selftest: red or not run -> STOP -> NO VERDICT, never host evidence'\n            fi\n" + "            echo 'selftest: all ok'\n")],
     ['M37 ImageOS guard duplicated', 'failclosed', mutant('both', IMAGEOS_LINE + '\n', IMAGEOS_LINE + '\n' + IMAGEOS_LINE + '\n')],
+    // FILL5: the whole runner-identity run: block pinned (FILL3 r1 nit 3); each caught by the exact-block check alone
+    ['M38 ImageOS defaulted before the guard (fail-open)', 'failclosed', mutant('both', IMAGEOS_LINE + '\n', '          ImageOS="${ImageOS:-unknown}"\n' + IMAGEOS_LINE + '\n')],
+    ['M39 RUNNER_ARCH test line deleted', 'failclosed', mutant('both', '          test "$RUNNER_ARCH" = "$WANT_ARCH"\n', '')],
+    ['M40 os default arm exit 1 -> true (fail-open)', 'failclosed', mutant('both', 'exit 1 ;;\n          esac\n      - name: checkout', 'true ;;\n          esac\n      - name: checkout')],
+    ['M41 extra line after esac', 'failclosed', mutant('both', '          esac\n      - name: checkout', '          esac\n          true\n      - name: checkout')],
+    ['M42 env gains a third key', 'failclosed', mutant('both', '          WANT_ARCH: ${{ matrix.arch }}\n', '          WANT_ARCH: ${{ matrix.arch }}\n          ImageOS: x\n')],
+    // FILL5 r1: blank-line env terminator, step position, job env key set (C-52), run key form
+    ['M43 env key after a blank line', 'failclosed', mutant('both', '          WANT_ARCH: ${{ matrix.arch }}\n', '          WANT_ARCH: ${{ matrix.arch }}\n\n          ImageOS: x\n')],
+    ['M44 GITHUB_ENV writer before runner identity', 'failclosed', mutant('both', '      - name: runner identity\n', '      - name: pre\n        run: echo "ImageOS=x" >> "$GITHUB_ENV"\n      - name: runner identity\n')],
+    ['M45 ImageOS added to the job env', 'failclosed', mutant('both', '    steps:\n      # runner identity', '      ImageOS: unknown\n    steps:\n      # runner identity')],
+    ['M46 top-level env: with ImageOS', 'failclosed', mutant('both', 'permissions:\n', 'env:\n  ImageOS: unknown\n\npermissions:\n')],
+    ['M47 double-quoted ImageOS key in the job env', 'failclosed', mutant('both', '    steps:\n      # runner identity', '      "ImageOS": x\n    steps:\n      # runner identity')],
+    ['M48 runner identity run: > instead of |', 'failclosed', mutant('both', '        run: |\n          : "${ImageOS:?unset}"', '        run: >\n          : "${ImageOS:?unset}"')],
+    // FILL5 r2 (REVIEW r2 item 1): a YAML comment line at any indent never ends a mapping (Q4 job env, Q5 step env)
+    ['M49 job env key after an indent-4 comment line', 'failclosed', mutant('both', '--single-threaded-gc\n    steps:', '--single-threaded-gc\n    # c\n      ImageOS: x\n    steps:')],
+    ['M50 step env key after an indent-8 comment line', 'failclosed', mutant('both', '          WANT_ARCH: ${{ matrix.arch }}\n', '          WANT_ARCH: ${{ matrix.arch }}\n        # c\n          ImageOS: x\n')],
+    // FILL5 r2 (item 2): explicit-key spelling of a top-level env (Q13); the allowlist catches it
+    ['M51 explicit-key top-level env (? env)', 'failclosed', mutant('both', 'permissions:\n', '? env\n: { ImageOS: unknown }\n\npermissions:\n')],
+    // C-53 JOBKEYS: container / self-hosted / services routes on the ab job
+    ['M52 (C-53) container: on the ab job', 'failclosed', mutant('both', '    timeout-minutes: 30\n', '    timeout-minutes: 30\n    container: node:22\n')],
+    ['M53 (C-53) runs-on: self-hosted', 'failclosed', mutant('both', '    runs-on: ${{ matrix.os }}\n', '    runs-on: self-hosted\n')],
+    ['M54 (C-53) services: on the ab job', 'failclosed', mutant('both', '    timeout-minutes: 30\n', '    timeout-minutes: 30\n    services:\n      x:\n        image: y\n')],
+    // FILL5 r3: C-53 jobs row control (M55); blockers 1-4 (M56 P2, M57 P10, M58 P6, M59 P8, M60 P4)
+    ['M55 (C-53) a second job beside ab', 'failclosed', mutant('both', 'jobs:\n  ab:\n', 'jobs:\n  pre:\n    runs-on: ubuntu-latest\n  ab:\n')],
+    ['M56 quoted shell: on runner identity sets ImageOS (P2)', 'failclosed', mutant('both', '      - name: runner identity\n', '      - name: runner identity\n        "shell": env ImageOS=x bash -e {0}\n')],
+    ['M57 col-0 comment then quoted continue-on-error in runner identity (P10)', 'failclosed', mutant('both', '          esac\n      - name: checkout', '          esac\n# c\n        "continue-on-error": true\n      - name: checkout')],
+    ['M58 unnamed uses step before runner identity (P6)', 'failclosed', mutant('both', '      - name: runner identity\n', '      - uses: ./x\n      - name: runner identity\n')],
+    ['M59 CR hides container: after timeout-minutes (P8)', 'failclosed', mutant('both', '    timeout-minutes: 30\n', '    timeout-minutes: 30\r    container: node:22\n')],
+    ['M60 quoted shell in defaults sets ImageOS (P4)', 'failclosed', mutant('both', '    shell: bash\n', '    "shell": env ImageOS=x bash -e {0}\n')],
 ];
 
 // ---------------------------------------------------------------- tests
@@ -502,6 +620,34 @@ test('the summary format is read from the producer; a missing or duplicated prod
     assert.deepEqual(countProblems(COUNT_ERE, ABSRC.replace(piece, piece + '\n' + piece)), ['ABGate.js: the selftest summary say(...) found 2 times (want exactly 1)'], 'duplicated');
     assert.deepEqual(countProblems(COUNT_ERE, ABSRC.replace(piece, piece.replace("' (untimed '", "' (untimedX '"))), ['ABGate.js: the selftest summary say(...) found 0 times (want exactly 1)'], 'renamed piece');
     assert.deepEqual(countProblems(COUNT_ERE, ''), ['ABGate.js: the selftest summary say(...) found 0 times (want exactly 1)'], 'absent');
+});
+test('control: the unmutated files pass the runner-identity exact-block check, and each FILL5 mutant fails it alone', () => {
+    for (const [f, t] of WFS(WORLD)) assert.deepEqual(runnerIdProblems(f, t), [], f);
+    for (const [f, t] of WFS(WORLD)) assert.deepEqual(jobEnvProblems(f, t), [], f);
+    const sel = MUTANTS.filter((m) => /^M(3[89]|4[0-9]|50) /.test(m[0]));
+    assert.equal(sel.length, 13);
+    for (const [what, , mk] of sel) {
+        const m = mk(WORLD, what);
+        assert.ok(WFS(m).every(([f, t]) => runnerIdProblems(f, t).length + jobEnvProblems(f, t).length !== 0), what);
+    }
+});
+test('control (r2 / C-53): the unmutated files pass the top-level / job-key checks, and M51..M54 each fail the new row alone', () => {
+    for (const [f, t] of WFS(WORLD)) assert.deepEqual(jobKeyProblems(f, t), [], f);
+    const sel = MUTANTS.filter((m) => /^M5[1-4] /.test(m[0]));
+    assert.equal(sel.length, 4);
+    for (const [what, , mk] of sel) {
+        const m = mk(WORLD, what);
+        assert.ok(WFS(m).every(([f, t]) => runnerIdProblems(f, t).length === 0 && jobEnvProblems(f, t).length + jobKeyProblems(f, t).length !== 0), what);
+    }
+});
+test('control (r3): M55..M60 each make the runner-identity / job-env / job-key rows non-empty; the unmutated files give []', () => {
+    for (const [f, t] of WFS(WORLD)) assert.deepEqual([...runnerIdProblems(f, t), ...jobEnvProblems(f, t), ...jobKeyProblems(f, t)], [], f);
+    const sel = MUTANTS.filter((m) => /^M(5[5-9]|60) /.test(m[0]));
+    assert.equal(sel.length, 6);
+    for (const [what, , mk] of sel) {
+        const m = mk(WORLD, what);
+        assert.ok(WFS(m).every(([f, t]) => runnerIdProblems(f, t).length + jobEnvProblems(f, t).length + jobKeyProblems(f, t).length !== 0), what);
+    }
 });
 test('the real files are untouched by the mutants (in-memory only)', () => {
     assert.deepEqual(loadWorld(), WORLD);
