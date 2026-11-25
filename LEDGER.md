@@ -254,10 +254,10 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   asserts a test-file floor.
 - **Reopens with:** a test glob or runner change that again lets an empty run pass.
 
-### B2. Fail-closed workflow steps were checked by presence only, so `continue-on-error` / `|| true` / `set +e` / `|| echo` slipped through *(FOUND 2026-11-25, G-C B2 review r1 / r2; FIXED r3)*
+### B2. Fail-closed workflow steps were checked by presence only, so `continue-on-error` / `|| true` / `set +e` / `|| echo` slipped through *(FOUND 2026-11-25, G-C B2 review r1 / r2; FIXED r3; REOPENED 2026-11-26 by FILL5 retry r3 probe P99, ruled C-57, open until FILL7 APPROVED)*
 - **What happened:** the docs.template test for templates/ab.yml and the ci.yml check asserted that the fail-closed
   steps were present. Review r1 REJECTED 2 LITERAL findings (presence-only fail-closed checks; ci concurrency on
-  main); r2 REJECTED 1 LITERAL (`|| echo` and `set +eo` still slipped); r3 APPROVED. The suite is 13 checks / 37 mutants (U8 B3 added stopgate + M30..M33; FILL3 added M34..M37; .handoff/COMMIT_MSG-U8B3.txt, COMMIT_MSG-FILL3.txt).
+  main); r2 REJECTED 1 LITERAL (`|| echo` and `set +eo` still slipped); r3 APPROVED. The suite is now 13 checks / 60 mutants (M1..M60; was 37 at FILL3: U8 B3 added stopgate + M30..M33, FILL3 added M34..M37, the FILL5 retry added M38..M60; .handoff/COMMIT_MSG-U8B3.txt, COMMIT_MSG-FILL3.txt, B13).
 - **Root cause:** a check that a step exists does not see a neutralizer attached to it (`continue-on-error`, `|| true`,
   `set +e`, `|| echo`); the check passed on a workflow whose failure could not fail the job.
 - **Evidence:** .handoff/HISTORY.md (burst 3, G-C B2); .handoff/evidence/U4-GCB2-docs-template.log,
@@ -344,7 +344,7 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   ran === total mutant).
 - **Reopens with:** a selftest count or completeness check added without its own must-fail.
 
-### B9. U7: 4 RAW / WARM AB gaps in the J1 judge, 3 confirmed fail-opens plus the WARM AB / A rule *(FOUND 2026-11-25, U7; ruled C-34 / A7; status: FIXED by U5b retry 2, burst 7, review r1 APPROVED, commit pending; retry r1 had been REJECTED DESIGN (C-47), diff parked .handoff/rejected/U5b2)*
+### B9. U7: 4 RAW / WARM AB gaps in the J1 judge, 3 confirmed fail-opens plus the WARM AB / A rule *(FOUND 2026-11-25, U7; ruled C-34 / A7; status: FIXED by U5b retry 2, burst 7, review r1 APPROVED, commit f6ac483; retry r1 had been REJECTED DESIGN (C-47), diff parked .handoff/rejected/U5b2)*
 - **What happened:** the U7 coder found, and the U7 reviewer confirmed, 4 gaps in the J1 judge: RAW AB missing with
   reps differing; a non-numeric RAW value; RAW AB present with equal reps (3 confirmed fail-opens); and the WARM AB / A
   rule, which the maintainer ruled in Q-WARMAB (a) "WARM mirrors AB". C-34: in the tool dialect the AB column rule
@@ -358,10 +358,10 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   REPORTED-label API tests, per .handoff/COMMIT_MSG-U5b3.txt); test/mutants.json C-34 (8 mutants; 63 / 63 killed per the
   same message). Review r1 (.handoff/overlay-U5b3/REVIEW-r1.md) reran the head judge.extra against base d4991c39: 43 of 56
   tests red = 39 rows (all 14 C-34, the 5 C-42 and 15 C-47 violation rows, all 5 C-50) + the 4 REPORTED-label tests; the 8
-  U7 rows and the C-42 / C-47 controls green (FILL6 review re-run; r1's split "6 C-42 + 13 C-34" mis-partitions the same 43). Commit pending.
+  U7 rows and the C-42 / C-47 controls green (FILL6 review re-run; r1's split "6 C-42 + 13 C-34" mis-partitions the same 43). Commit f6ac483.
 - **Reopens with:** a RAW / WARM shape the C-34 rule does not reject reopens it.
 
-### B10. U5b r1: a REPORTED lane with unparsed or duplicated RESULT reps skipped the C-34 AB rule and read PASS *(FOUND 2026-11-25 burst 5, U5b review r1 DESIGN; ruled C-42 / SPEC A9; FIXED by U5b retry 2, burst 7, review r1 APPROVED, commit pending)*
+### B10. U5b r1: a REPORTED lane with unparsed or duplicated RESULT reps skipped the C-34 AB rule and read PASS *(FOUND 2026-11-25 burst 5, U5b review r1 DESIGN; ruled C-42 / SPEC A9; FIXED by U5b retry 2, burst 7, review r1 APPROVED, commit f6ac483)*
 - **What happened:** review r1 REJECTED the U5b diff (head ABGate.js 2205b4e3). A lane with exactly one RESULT whose reps
   cannot be parsed (`reps=A:4,B:1,AB:1x`, or reps printed twice) got differ = null, so the RAW / WARM AB rule was never
   checked; the verdict read PASS (code 0) even with RAW AB= and WARM AB/A= on that lane (reviewer probes P1, P1b, P1c).
@@ -375,10 +375,10 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Gate:** test/judge.extra.test.mjs: 6 C-42 rows (incl. the no-reps-field row the r1 LITERAL asked for); test/mutants.json
   C-42 (5 mutants, incl. C42e; 63 / 63 killed per .handoff/COMMIT_MSG-U5b3.txt). The 2 C-42 judge.rows / selftest expectations
   moved from "(gated lane not clean)" to "(run shape)" are re-pinned oracle edits (reviewed). Review r1
-  (.handoff/overlay-U5b3/REVIEW-r1.md): the 5 C-42 violation rows red on d4991c39, the C-42 control green. Commit pending.
+  (.handoff/overlay-U5b3/REVIEW-r1.md): the 5 C-42 violation rows red on d4991c39, the C-42 control green. Commit f6ac483.
 - **Reopens with:** a reps shape the C-42 rule does not reject reopens it.
 
-### B11. U5b retry r1: RESULT ab / B/AB / wordAB / bop AB columns unchecked on REPORTED lanes (two PASS probes) *(FOUND 2026-11-25 burst 6, U5b retry review r1 DESIGN; ruled C-47 / SPEC A12; FIXED by U5b retry 2, burst 7, review r1 APPROVED, commit pending)*
+### B11. U5b retry r1: RESULT ab / B/AB / wordAB / bop AB columns unchecked on REPORTED lanes (two PASS probes) *(FOUND 2026-11-25 burst 6, U5b retry review r1 DESIGN; ruled C-47 / SPEC A12; FIXED by U5b retry 2, burst 7, review r1 APPROVED, commit f6ac483)*
 - **What happened:** review r1 of the retry (head ABGate.js 9156bd9a) REJECTED DESIGN. The C-34 AB rule was enforced on a
   REPORTED lane for RAW and WARM but not for RESULT. Probe (a): y:r reps=A:4,B:1,AB:1 with RESULT ab / B/AB / wordAB =
   n/a and no AB entry in bop; probe (b): y:r equal reps but RESULT carrying ab / B/AB / wordAB values. Both read
@@ -400,7 +400,10 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   killed, per .handoff/COMMIT_MSG-U5b3.txt; re-pins: 3 C-47 + 3 C-50 judge.rows / selftest judgeRows rows, (gated lane not
   clean) -> (run shape). Review r1 (.handoff/overlay-U5b3/REVIEW-r1.md): the 15 C-47 violation rows, all 5 C-50 rows and the 4
   REPORTED-label tests red on d4991c39 (the C-47 control green); 60 fail-open probes ({y:r, y:g} x 30 conditions) all in scope fail closed. Open there: the C-51
-  leads (y:r PASS with a label only) go to U5c. Commit pending.
+  leads (y:r PASS with a label only) go to U5c.
+  U5c (burst 7; review r1 REJECTED 2 LITERAL, r2 APPROVED ae062f12; commit f6ac483) closed the C-51 leads with C-40 / C-41 / C-51 / C-54 / C-55 / C-56:
+  test/judge.extra.test.mjs 115 rows (asserted at :340) + 7 label tests (:359-:427) + the real-log row (:440); test/mutants.json 122 mutants, all killed (122 entries counted in the file; kill log
+  .handoff/evidence/U5c4-mutants.log); 16 gated re-pins with U5b3.
 - **Reopens with:** a line family on a reported lane that still only labels reopens it (C-51 grammar is U5c's).
 
 ### B12. U9 B1: review findings on bench/reproof.mjs (r1: 3 fail-opens + 2 gate-teeth LITERAL; r2: 1 fail-open; r3: 2-line round) *(FOUND 2026-11-25 burst 5, U9 B1 review r1 / r2; FIXED r3, commit 224bf19)*
@@ -416,7 +419,7 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Gate:** test/reproof.judge.test.mjs (91 deterministic rows on judgeHolds in bench/reproof.mjs; npm test); the judge mutation harness (62 / 62 per COMMIT_MSG-U9B1.txt) is a one-off run (.handoff/evidence/U9-B1/task4-judge-mutants*.log), not a standing test.
 - **Reopens with:** a judge guard in bench/reproof.mjs with no row that fails on it alone.
 
-### B13. FILL5: the runner-identity guard `: "${ImageOS:?unset}"` could be satisfied ahead of itself by five routes; the docs.template test pinned only the guard line *(FOUND 2026-11-25 burst 7, FILL5 review r1 + r2, both REJECTED; ruled C-52 / C-53; parked .handoff/rejected/FILL5; fix = FILL5 retry)*
+### B13. FILL5: the runner-identity guard `: "${ImageOS:?unset}"` could be satisfied ahead of itself by five routes; the docs.template test pinned only the guard line *(FOUND 2026-11-25 burst 7, FILL5 review r1 + r2, both REJECTED; ruled C-52 / C-53; parked .handoff/rejected/FILL5; status: FIXED by the FILL5 retry, burst 8 (r3 REJECTED 5 LITERAL, fix round APPROVED))*
 - **What happened:** the guard in templates/ab.yml and the dogfood .github/workflows/ab.yml (`: "${ImageOS:?unset}"`) is the
   runner-identity check. FILL3 review r1 (nit 3, FILL5's goal) found route (1) and review of the FILL5 test-only diff
   (test/docs.template.test.mjs) found routes (2)-(5): five routes that set
@@ -432,10 +435,33 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   unverified there: GitHub's parser on escaped / explicit-key YAML forms, and container env reaching run: steps);
   .handoff/lite-ab-gate/SPEC.md C-52, C-53, addenda A15, A16.
 - **Law:** law 4 (a guard needs a control that fails on it alone); law 7 (a runner whose identity is not proven is STOP, not host evidence).
-- **Gate:** none yet (FILL5 retry applies the r2 fixes and C-52 / C-53 in test/docs.template.test.mjs). Until it lands,
-  the pinned guard line alone is the gate and the five routes are open. The "13 checks / 37 mutants" count in B-entry
-  text above (suite state at FILL3) goes stale when FILL5 lands.
-- **Reopens with:** FILL5 retry review APPROVED closes this entry; a sixth route to ImageOS ahead of the guard reopens it.
+- **Fix (FILL5 retry, burst 8, 2026-11-26):** r3 REJECTED 5 LITERAL: 12 of 16 PyYAML probes passed (quoted step keys, a
+  column-0 comment ending a step scan, an unnamed first step, bare CR / NEL line breaks, a quoted defaults.run.shell; plus a jobs-list row with no control (r3 blocker 5)). The fix round was APPROVED: 14 of 16 probes fail closed, 2 inert (max-parallel, a P16 matrix
+  container). Outside B13 (B2's class; B2 reopened): P99, a quoted "continue-on-error": true on the selftest step (the old failclosed regex
+  rows match unquoted keys only); ruled C-57 (A20, Q-STEPKEYS (a): pin every step's key set), implementing unit FILL7.
+  Lesson (r3): a YAML line model fails open wherever YAML's grammar is wider than the model (quoted keys, CR / NEL,
+  comments); pin exact key sets and bytes rather than deny-listing forms.
+- **Gate:** test/docs.template.test.mjs 6edd3c6f: 13 checks, 60 mutants (M1..M60), 80 tests in the file, 5 controls (3 from FILL5: :624, :634, :643); npm test
+  542 / 542 on HEAD + that file (.handoff/overlay-FILL5b/npm-test-head-r2.log). M55..M60 each fail exactly the failclosed
+  check (REVIEW-r3b.md). The "13 checks / 37 mutants" count in B2 above is updated to 60.
+- **Evidence (fix):** .handoff/overlay-FILL5b/REVIEW-r3.md, REVIEW-r3b.md (r1 / r2 text: REVIEW-r1r2.md).
+- **Reopens with:** a sixth route to ImageOS ahead of the guard reopens it.
+
+### B14. U5c sweep: the RESULT grammar class (unknown, out-of-order or duplicated RESULT fields, 310-digit and non-finite numerics) *(FOUND 2026-11-25 burst 7, U5c coder sweeps; ruled C-54 / C-55 / C-56 (C-51 came from the U5b retry 2 sweep, A15); FIXED by U5c, review r1 REJECTED 2 LITERAL, r2 APPROVED, commit f6ac483)*
+- **What happened:** after B11 the coder ran two sweep loops over the RESULT line before review: sweep 1 found the
+  gaps behind C-54 (printed word vs the word B/A reads; B/A, aa, slow, A, B, B-A in NUM_RE grammar; win / spin integers; the (gated) / (reported) tag) and C-55 (negative bop value is grammar,
+  Infinity stays the ALLOC label); sweep 2 found unknown / out-of-order fields and 310-digit numerics still passing, the last edge, C-56 (RESULT holds exactly the producer's fields, each
+  once, in the producer's order; every numeric finite). Each was a reported-lane label-only path: PASS with a NOT-CLEAN
+  label. Review r1 REJECTED 2 LITERAL (a forged `ns/op=` token read PASS; 5 reviewer mutants survived: -0.0001 bop,
+  word over NaN B/A, partial NaN, two VOID tails, -Infinity bop); r2 APPROVED (ae062f12).
+- **Root cause:** same mechanism as B10 / B11 (a reported lane's label never reaches the verdict); the fix was to
+  sweep every field of the family, not the instance (B11 lesson applied: two sweep loops before review).
+- **Evidence:** .handoff/HISTORY.md (burst 7, U5c); .handoff/evidence/U5c*-*.log (U5c4-killers.log, U5c4-npm-test.log);
+  SPEC C-51, C-54, C-55, C-56, addenda A18, A19.
+- **Law:** law 4; suite law "null is not zero".
+- **Gate:** test/judge.extra.test.mjs (115 rows at :340, 7 label tests :359-:427, the real-log row :440);
+  test/mutants.json 122 mutants, all killed by test/mutants.test.mjs (DETERMINISTIC, npm test; U5c4-npm-test.log 516 / 516), incl. 6 u5c-review mutants (the 5 r1 survivors + B1-nsopKeyed), each with its own row (U5c4-killers.log).
+- **Reopens with:** a RESULT field or value shape the C-51 / C-54..C-56 grammar accepts that the producer cannot print.
 
 ## C. Measurements (this package's own runs on ABGate.js)
 
@@ -468,7 +494,7 @@ not X.
   settle-void are torture-only, out of the timed --selftest list).
 - **Gate:** none yet (U9E adds T-SETTLE on a frozen-only R1-shaped lane with AB_GATE_INJECT=no-settle as its must-fail,
   and the settle-void control for VOID TIER-SETTLE; plan-U9E-v1.md).
-- **Reopens with:** U9E review APPROVED plus a new frozen G re-run closes the U9E part; a callee tier-up inside the window on a settled lane reopens it.
+- **Reopens with:** a new frozen G calibration re-run (after U9E review APPROVED) closes the U9E part; a callee tier-up inside the window on a settled lane reopens it.
 
 ## D. Process lessons
 

@@ -18,10 +18,10 @@
   (`node ~/.claude/hooks/quiet-lock.mjs run "<what>" -- <cmd>`; `--strict` for a release-gating timing).
 - U9 statistical re-proof of the hoisted timed loop vs frozen ab-proto 74f1a3d4 is REQUIRED before 1.0 (C-23).
 
-## 2. SETTLED (binding for every agent; C-1..C-53)
+## 2. SETTLED (binding for every agent; C-1..C-60)
 
 C-3, C-13, C-14 and C-16 rest on suite law or R1 findings, and C-18..C-21 and C-29 are orchestrator / planner
-reconciliations, and C-46 records E1 behaviour (U3 review r1, A3); the other rows are maintainer rulings (the Q-id, where one exists, and the option label are in the SPEC).
+reconciliations, C-46 records E1 behaviour (U3 review r1, A3), and C-60 records the U8 B1 review r1 gaps (orchestrator, A21); the other rows are maintainer rulings (the Q-id, where one exists, and the option label are in the SPEC).
 
 - C-1 HOME (Q-HOME (a)): a NEW single-file package, main ABGate.js, zero runtime deps, consumed as a
   devDependency; never a LitePerfGate mode or second file.
@@ -166,6 +166,27 @@ reconciliations, and C-46 records E1 behaviour (U3 review r1, A3); the other row
   timeout-minutes, strategy, env, steps) and runs-on exactly `${{ matrix.os }}` in every workflow file it checks; top-level keys are an allowlist (name, on,
   permissions, defaults, jobs) and a
   comment line never ends an env scan. Implementing unit: FILL5 retry (parked .handoff/rejected/FILL5).
+- C-54 RESULTREST (Q-RESULTREST (a) "Run shape, in U5c now"): TOOL dialect, every lane: the printed word equals the
+  word its B/A reads; B/A, aa, slow, A, B, B-A are NUM_RE grammar (NaN only as the VOID NAN outcome); win / spin
+  integers; the (gated) / (reported) tag matches the spec; else run shape NO VERDICT (code 2). Implementing unit: U5c.
+- C-55 BOPVAL (Q-BOPVAL (a) "Infinity ok, negative = shape"): a bop value Infinity stays valid (the ALLOC VOID
+  outcome, a lane label); a negative bop value -> run shape NO VERDICT on every lane. Implementing unit: U5c.
+- C-56 RESULTSET (Q-RESULTSET (a) "Exact set + finite, U5c now"): TOOL dialect, every lane: RESULT holds exactly the
+  producer's fields, each once, in the producer's order, and every C-54 numeric is finite (NaN only beside its VOID
+  NAN item); else run shape NO VERDICT (code 2). Implementing unit: U5c.
+- C-57 STEPKEYS (Q-STEPKEYS (a) "Pin every step's key set", A20; FILL5 retry r3 finding P99): test/docs.template.test.mjs pins,
+  in every workflow file it checks, the exact key set of EVERY ab-job step as a literal constant per step (quoted or
+  unquoted, any extra key fails closed; one mutant per step class), replacing reliance on the unquoted
+  continue-on-error / shell / if regex rows. Implementing unit: FILL7 (test-only).
+- C-58 CLASH-SCOPE (Q-CLASH-SCOPE (a) "Fold untimed too", A21; amends C-37): markerClash also runs on the untimed child
+  rows (live-drift, frozen-drift), folded into each row the same way; no new row, counts unchanged, --selftest-untimed
+  goldens stay byte-identical. Implementing unit: U9E B1.
+- C-59 WORKFLOOR-KINDS (Q-WORKFLOOR-KINDS (a) "Reserve tool kinds", A21): the lane-spec contract reserves the tool's VOID
+  kinds; a workFloor reason that starts with one (ALLOC, SLOW-DEAD, AA-DRIFT, any other tool VOID kind) is STOP SPEC,
+  pre-clock (fail closed). Implementing unit: a later judge / spec unit (+ LEDGER entry); README / d.ts note in U10.
+- C-60 U8B2-GAPS (A21; binding for U8 B2): (G1) the timed-loop fold and the VOID replay get a permanent npm-test gate in
+  test/selftest.untimed.test.mjs (must-fail on a no-fold copy); (G2) markerClash cases: all 12 own lines joined in one
+  output -> '', 2 clashing lines -> 2 clauses; (G3) the timed harness step (i) asserts >= 4 `SELFTEST   VOID ` lines.
 
 Open maintainer questions: none.
 
@@ -202,3 +223,6 @@ Main-file rungs E1 -> E2 -> J1 -> J2 are sequential; each unit = coder batch + r
   devDependency (C-1) right after LiteSignal 1.6.0 is released. Orchestrator note (not part of the quote): this
   makes lite-ab-gate 1.0 published on npm a prerequisite. A LiteSignal burst, not this program; nothing here edits
   LiteSignal.
+- Post-1.0 research burst (NOT 1.0 scope): benchmark prior art (noop-floor guard, B/B twin, compilation agreement,
+  changepoint steady state, env jitter; counters wait on a zero-deps ruling). Seed:
+  .handoff/research/post-1.0-prior-art/SEED.md (UNVERIFIED, not a PROPOSAL). Maintainer go 2026-11-25.
