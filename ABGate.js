@@ -1503,6 +1503,19 @@ const FROZEN_ONLY_TAIL = ' ok; live not bound (frozen only)';
 const preClock = (out) => !/^(HEADER rung=|PROV start |CONTROL gc-window|WINDOW lane=)/m.test(out);
 const JUDGE_ROWS = 59;         // plan-GB A2: 58 verdictOf rows on the tool-owned spec + the empty-gated belt row
 const SELFTEST_UNTIMED = 5 + JUDGE_ROWS + 3;   // plan-GB A4 = 67: replay, allocRow, empty-gated, live-drift, frozen-drift, 59 judge, 3 consumer
+/** U8 (C-37, extends C-21 to real output): pure, cold path. Every line of a child's output `out` is tested ALONE against
+ *  every INJECTIONS marker (a line holds no '\n', so the /m flag cannot widen ^ / $ past it; the markers are non-global,
+ *  so no lastIndex state). Returns '' when no line is matched by >= 2 markers, else one 'marker clash ...' clause per
+ *  such line, naming the markers and the line (cut at 460 chars). The timed loop folds it into the row's `extra`. */
+function markerClash(out) {
+    const names = Object.keys(INJECTIONS);
+    let desc = '';
+    for (const l of String(out).split('\n')) {
+        const hit = names.filter((n) => INJECTIONS[n].marker.test(l));
+        if (hit.length >= 2) desc += (desc === '' ? '' : ';') + ' marker clash: ' + hit.length + ' markers (' + hit.join(', ') + ') match one line ' + JSON.stringify(l.slice(0, 460));
+    }
+    return desc;
+}
 /** --selftest (untimed rows, then the timed children) and --selftest-untimed (the untimed rows only): 0 all ok | 1 FAIL.
  *  Every row runs (a row that cannot run is a FAIL, never a skip) and ran === total is checked. */
 function selftest(ctx, untimedOnly) {
@@ -1614,13 +1627,16 @@ function selftest(ctx, untimedOnly) {
             if (!(w0 > AA_HI)) extra += ' WARM AA/A ' + w0 + ' not > ' + AA_HI + ' (the skew did not land in round 0);';
             if (raa === undefined || raa === null || raa.split(',').length !== k) extra += ' RAW AA ' + raa + ' does not hold exactly ' + k + ' counted round(s);';
         }
+        // U8 (C-37): one real child line matched by >= 2 INJECTIONS markers fails this row (no new row: counts unchanged)
+        const clash = markerClash(r.out);
+        if (clash !== '') extra += clash + ';';
         const ok = r.status === spec.want && has && extra === '' && r.vline !== null && r.vline.startsWith(spec.verdict) && !r.vline.includes('verdictOf crashed') &&
             (spec.names === undefined || spec.names.every((s) => r.vline.includes(s)));
         row(ok, (name === null ? 'clean' : name) + ' ' + lane + ' K=' + k + ': exit ' + r.status + ' (want ' + spec.want + ') ' +
             (spec.marker === null ? 'no STOP / CRASH ' + (has ? 'ok' : 'VIOLATED') : 'marker ' + String(spec.marker) + ' ' + (has ? 'present' : 'ABSENT')) + extra +
             ' verdict ' + (r.vline === null ? '(' + r.nV + ' VERDICT lines)' : JSON.stringify(r.vline.slice(0, 200))) + ' (want ' + JSON.stringify(spec.verdict) + ')', ok ? null : r.out);
         // the replayed RESULT / VOID line of an injection child is printed even on ok, so its numbers stay in the log (B18)
-        if (ok) for (const l of r.out.split('\n')) if (/^(RESULT|STOP|WARM) /.test(l)) say(ctx, 'SELFTEST   ' + l.slice(0, 460));
+        if (ok) for (const l of r.out.split('\n')) if (/^(RESULT|STOP|WARM|VOID) /.test(l)) say(ctx, 'SELFTEST   ' + l.slice(0, 460));
     }
     if (l0 === undefined) { bad++; say(ctx, 'SELFTEST no gated lane in the spec -> FAIL'); }
     if (jr.length !== JUDGE_ROWS - 1 || cr.length !== 3) { bad++; say(ctx, 'SELFTEST rows built: judge ' + jr.length + ' + the belt (want ' + (JUDGE_ROWS - 1) + ' + 1), consumer ' + cr.length + ' (want 3) -> FAIL'); }
