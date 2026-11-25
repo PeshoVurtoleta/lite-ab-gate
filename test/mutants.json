@@ -124,7 +124,7 @@
     {
       "id": "C11a-ABrepsAtB",
       "group": "C-11",
-      "why": "C-11: AB reps must equal B reps when reps differ (rows A:4,B:1,AB:4 and AB reps not printed)",
+      "why": "C-11: AB reps must equal B reps when reps differ (label). U5b retry 2: C-50 makes the rows A:4,B:1,AB:4 / AB reps not printed run shape either way; the killer is now the judge.extra test \"a REPORTED lane with reps A:4,B:1,AB:4 is NOT-CLEAN\"",
       "find": "if (rm[3] === undefined || Number(rm[3]) !== Number(rm[2])) why.push(",
       "replace": "if (false) why.push(",
       "files": [
@@ -136,7 +136,7 @@
     {
       "id": "C11b-BABfinite",
       "group": "C-11",
-      "why": "C-11: reps differ needs a finite B/AB (row (iii) B/AB missing, B/AB q3 NaN)",
+      "why": "C-11: reps differ needs a finite B/AB (row: B/AB q3 NaN). U5b retry 2: row (iii) B/AB n/a is now C-47 run shape and no longer reaches this label",
       "find": "if (!fin3(bab)) why.push(",
       "replace": "if (false) why.push(",
       "files": [
@@ -172,7 +172,7 @@
     {
       "id": "C11e-ABbop",
       "group": "C-11",
-      "why": "C-11: reps differ adds an AB B/op entry (row: no AB bop; row (i) PASS needs AB accepted)",
+      "why": "C-11: reps differ adds an AB B/op entry (row (i) PASS needs AB accepted). U5b retry 2: the row \"no AB bop\" is now C-47 run shape",
       "find": "cols = [...BOP_COLS, 'AB'];",
       "replace": "cols = BOP_COLS;",
       "files": [
@@ -184,7 +184,7 @@
     {
       "id": "C11f-equalRepsNoAB",
       "group": "C-11",
-      "why": "C-11: equal reps means no AB (row: equal reps with an AB reps field)",
+      "why": "C-11: equal reps means no AB (label). U5b retry 2: C-50 makes the row \"equal reps with an AB reps field\" run shape either way; the killer is now the judge.extra test \"a REPORTED lane with equal reps A:1,B:1,AB:1 is NOT-CLEAN\"",
       "find": "} else if (rm[3] !== undefined) why.push(",
       "replace": "} else if (false) why.push(",
       "files": [
@@ -196,7 +196,7 @@
     {
       "id": "C11g-equalRepsNA",
       "group": "C-11",
-      "why": "C-11: equal reps print ab / B/AB / wordAB as n/a (row: equal reps with a finite B/AB)",
+      "why": "C-11: equal reps print ab / B/AB / wordAB as n/a. U5b retry 2: C-47 makes such a RESULT run shape in warmShape, so the row \"equal reps with a finite B/AB\" reads NO VERDICT (run shape) either way; the killer is now the judge.extra test \"a REPORTED lane with equal reps and a B/AB value is NOT-CLEAN in the REPORTED line\"",
       "find": "if (field(line, k) !== 'n/a') why.push(",
       "replace": "if (false) why.push(",
       "files": [
@@ -208,7 +208,7 @@
     {
       "id": "C11h-repsAnchor",
       "group": "C-11",
-      "why": "C-11: the reps field is exactly A:n,B:n[,AB:n] (row: forged AB:1/4; green on E1, see note)",
+      "why": "C-11: the reps field is exactly A:n,B:n[,AB:n] (row: forged AB:1/4; green on E1, see note). U5b retry: C-42 makes an off-grammar reps run shape in warmShape, so the forged row reads NO VERDICT (run shape) either way; the killer is now the judge.extra test \"a REPORTED lane with forged reps ... is NOT-CLEAN in the REPORTED line\"",
       "find": "/^A:(\\d+),B:(\\d+)(?:,AB:(\\d+))?$/.exec(repsTxt)",
       "replace": "/^A:(\\d+),B:(\\d+)(?:,AB:(\\d+))?/.exec(repsTxt)",
       "files": [
@@ -429,6 +429,1038 @@
       "replace": "",
       "files": [
         "test/selftest.untimed.test.mjs"
+      ]
+    },
+    {
+      "id": "C34a-rawABmissing",
+      "group": "C-34",
+      "why": "C-34: reps differ -> RAW carries the AB column (extra row: reps differ, RAW AB column missing)",
+      "find": "if (differ === true && field(l, 'AB') === null) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C34b-rawFinite",
+      "group": "C-34",
+      "why": "C-34 + C-14: every RAW value is a finite NUM_RE number; weakened to the old empty-value test (extra rows: NaN, x, 1e3, 310 digits, AB Infinity)",
+      "find": "const nf = vs.find((v) => !Number.isFinite(num(v)));",
+      "replace": "const nf = vs.find((v) => v === '');",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C34c-rawABequal",
+      "group": "C-34",
+      "why": "C-34: equal reps -> no RAW AB column (extra rows: equal reps with RAW AB on the gated and on the reported lane)",
+      "find": "if (differ === false && l.includes(' AB=')) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C34d1-warmABmissing",
+      "group": "C-34",
+      "why": "C-34: reps differ -> WARM carries one AB/A column (extra row: reps differ, WARM AB/A missing)",
+      "find": "if (differ === true && nWab !== 1) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C34d2-warmABequal",
+      "group": "C-34",
+      "why": "C-34: equal reps -> no WARM AB/A column (extra rows: equal reps with WARM AB/A on the gated and on the reported lane)",
+      "find": "if (differ === false && nWab !== 0) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C34d3-warmABtwice",
+      "group": "C-34",
+      "why": "C-34: reps differ -> WARM carries exactly ONE AB/A column; nWab !== 1 weakened to nWab === 0 (extra row: WARM AB/A printed twice; review r1 blocker 2)",
+      "find": "if (differ === true && nWab !== 1) shape.push(",
+      "replace": "if (differ === true && nWab === 0) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C34a2-rawABtwice",
+      "group": "C-34",
+      "why": "C-34 + C-28: reps differ -> ONE RAW AB column; field(l, 'AB') === null (absent OR printed twice) weakened to a substring test (extra row: RAW AB column printed twice; review r1 blocker 2)",
+      "find": "if (differ === true && field(l, 'AB') === null) shape.push(",
+      "replace": "if (differ === true && !l.includes(' AB=')) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C34c2-rawABequalTwice",
+      "group": "C-34",
+      "why": "C-34: equal reps -> no RAW AB column, also when printed twice; the substring test narrowed to field() (absent OR twice reads null) (extra row: equal reps, RAW AB printed twice; retry review r1 nit, reviewer mutant R2)",
+      "find": "if (differ === false && l.includes(' AB=')) shape.push(",
+      "replace": "if (differ === false && field(l, 'AB') !== null) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C42a-off",
+      "group": "C-42",
+      "why": "C-42: a RESULT reps field unparsed or printed twice is run shape on any lane; check removed (extra rows: C-42 reported / gated, unparsed / twice; judge.rows reps unparsed / forged)",
+      "find": "if (rl !== null && rr === null) {",
+      "replace": "if (false) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C42b-gatedOnly",
+      "group": "C-42",
+      "why": "C-42: the rule holds on a REPORTED lane too; restricted to gated lanes (extra rows: C-42 REPORTED lane unparsed / printed twice)",
+      "find": "if (rl !== null && rr === null) {",
+      "replace": "if (rl !== null && rr === null && Object.hasOwn(sp.gated, id)) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C42c-twiceBoundary",
+      "group": "C-42",
+      "why": "C-42: reps printed twice (count exactly 2) names the duplicate; >= 2 flipped to > 2 (boundary rows: C-42 reported / gated reps printed twice)",
+      "find": "nReps >= 2 ?",
+      "replace": "nReps > 2 ?",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C42d-unanchored",
+      "group": "C-42",
+      "why": "C-42: the reps grammar is anchored (A:<n>,B:<n>[,AB:<n>] and nothing more); $ dropped (extra rows: C-42 REPORTED A:4,B:1,AB:1x, GATED A:1,B:1x)",
+      "find": "(?:,AB:(\\d+))?$/.exec(rt);",
+      "replace": "(?:,AB:(\\d+))?/.exec(rt);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C42e-absentReps",
+      "group": "C-42",
+      "why": "C-42 + C-14: a RESULT line with NO reps field is unparsed (run shape); narrowed to lines that print reps (extra row: C-42 REPORTED lane with no reps field; retry review r1 blocker 2, reviewer mutant R1)",
+      "find": "if (rl !== null && rr === null) {",
+      "replace": "if (rl !== null && rr === null && rl.includes(\" reps=\")) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47a-off",
+      "group": "C-47",
+      "why": "C-47: the RESULT ab / B/AB / wordAB / bop AB rule removed (extra rows: every C-47 row; judge.rows reps (iii), no AB bop, equal reps finite B/AB)",
+      "find": "if (rl !== null && differ !== null) {",
+      "replace": "if (false) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47b-gatedOnly",
+      "group": "C-47",
+      "why": "C-47: the rule holds on EVERY lane; restricted to gated lanes (extra rows: every C-47 row edits the REPORTED lane y:r)",
+      "find": "if (rl !== null && differ !== null) {",
+      "replace": "if (rl !== null && differ !== null && Object.hasOwn(sp.gated, id)) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47c-oneField",
+      "group": "C-47",
+      "why": "C-47: all three fields ab, B/AB, wordAB; narrowed to ab only (extra rows: C-47a B/AB=n/a only, wordAB=n/a only; C-47c B/AB / wordAB value only)",
+      "find": "for (const k of ['ab', 'B/AB', 'wordAB']) {\n                const v = field(rl, k);",
+      "replace": "for (const k of ['ab']) {\n                const v = field(rl, k);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47d-nullOk",
+      "group": "C-47",
+      "why": "C-47: reps differ -> each field PRESENT once; field() null (absent / twice) accepted (extra rows: C-47a ab field absent, wordAB printed twice)",
+      "find": "if (differ === true && (v === null || v === 'n/a')) shape.push(",
+      "replace": "if (differ === true && v === 'n/a') shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47e-equalFieldsOff",
+      "group": "C-47",
+      "why": "C-47: equal reps -> ab, B/AB, wordAB all n/a; branch removed (extra rows: C-47c values / one value each / ab absent)",
+      "find": "if (differ === false && v !== 'n/a') shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47f-bopDifferOff",
+      "group": "C-47",
+      "why": "C-47: reps differ -> exactly one bop AB entry; check removed (extra rows: C-47b bop with 0 / 2 AB: entries)",
+      "find": "if (differ === true && nBab !== 1) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47g-bopZeroOnly",
+      "group": "C-47",
+      "why": "C-47 boundary (law 8): exactly one bop AB entry; !== 1 weakened to === 0 (extra row: C-47b bop with 2 AB: entries)",
+      "find": "if (differ === true && nBab !== 1) shape.push(",
+      "replace": "if (differ === true && nBab === 0) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47h-bopTwoOnly",
+      "group": "C-47",
+      "why": "C-47 boundary (law 8): exactly one bop AB entry; !== 1 weakened to > 1 (extra row: C-47b bop with 0 AB: entries)",
+      "find": "if (differ === true && nBab !== 1) shape.push(",
+      "replace": "if (differ === true && nBab > 1) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47i-bopEqualOff",
+      "group": "C-47",
+      "why": "C-47: equal reps -> no bop AB entry; check removed (extra rows: C-47d bop with 1 AB: entry, second bop field with an AB: entry)",
+      "find": "if (differ === false && nBab !== 0) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47j-bopEqualBoundary",
+      "group": "C-47",
+      "why": "C-47 boundary (law 8): equal reps -> zero bop AB entries; !== 0 weakened to > 1 (extra row: C-47d bop with 1 AB: entry)",
+      "find": "if (differ === false && nBab !== 0) shape.push(",
+      "replace": "if (differ === false && nBab > 1) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C47k-bopFirstOnly",
+      "group": "C-47",
+      "why": "C-47: the AB entry count runs over EVERY bop field on the line; narrowed to the first (extra row: C-47d a second bop field holding an AB: entry)",
+      "find": ".filter((t) => t.startsWith('bop='))",
+      "replace": ".filter((t) => t.startsWith('bop=')).slice(0, 1)",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C50a-gatedOnly",
+      "group": "C-50",
+      "why": "C-50: the rule holds on EVERY lane; restricted to gated lanes (extra rows: every C-50 row edits the REPORTED lane y:r)",
+      "find": "if (rr !== null) {",
+      "replace": "if (rr !== null && Object.hasOwn(sp.gated, id)) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C50b-equalOff",
+      "group": "C-50",
+      "why": "C-50: equal reps -> no AB part; branch removed (extra row: C-50 equal reps with an AB part A:1,B:1,AB:1)",
+      "find": "if (differ === false && rr[3] !== undefined) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C50c-ABneBOff",
+      "group": "C-50",
+      "why": "C-50: reps differ -> AB n = B reps; the compare removed, presence only (extra rows: C-50 AB:4, AB = B + 1, AB = B - 1)",
+      "find": " || Number(rr[3]) !== Number(rr[2]))) shape.push(",
+      "replace": ")) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C40a-colsLoose",
+      "group": "C-40",
+      "why": "C-40: the WARM column grammar back to any <NAME>/A= list (the pre-U5c regex); killer: WARM A/A and B/A swapped",
+      "find": "const WARM_COLS_RE = /^A\\/A=\\S+ B\\/A=\\S+ AA\\/A=\\S+ SLOW\\/A=\\S+( AB\\/A=\\S+)*$/;",
+      "replace": "const WARM_COLS_RE = /^[A-Z]+\\/A=\\S+( [A-Z]+\\/A=\\S+)*$/;",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C40b-anyTrailing",
+      "group": "C-40",
+      "why": "C-40: any trailing <NAME>/A column accepted after SLOW/A; killer: WARM 6 columns (X/A after AB/A)",
+      "find": "const WARM_COLS_RE = /^A\\/A=\\S+ B\\/A=\\S+ AA\\/A=\\S+ SLOW\\/A=\\S+( AB\\/A=\\S+)*$/;",
+      "replace": "const WARM_COLS_RE = /^A\\/A=\\S+ B\\/A=\\S+ AA\\/A=\\S+ SLOW\\/A=\\S+( [A-Z]+\\/A=\\S+)*$/;",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C40c-slowOptional",
+      "group": "C-40",
+      "why": "C-40: SLOW/A optional; killer: WARM 3 columns (SLOW/A dropped)",
+      "find": "const WARM_COLS_RE = /^A\\/A=\\S+ B\\/A=\\S+ AA\\/A=\\S+ SLOW\\/A=\\S+( AB\\/A=\\S+)*$/;",
+      "replace": "const WARM_COLS_RE = /^A\\/A=\\S+ B\\/A=\\S+ AA\\/A=\\S+( SLOW\\/A=\\S+)?( AB\\/A=\\S+)*$/;",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C40d-gramGatedOnly",
+      "group": "C-40",
+      "why": "C-40 guard: the column grammar on gated lanes only; killer: REPORTED WARM 3 columns",
+      "find": " || !WARM_COLS_RE.test(l.slice(head.length))) shape.push(",
+      "replace": " || (Object.hasOwn(sp.gated, id) && !WARM_COLS_RE.test(l.slice(head.length)))) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C40e-valueOff",
+      "group": "C-40",
+      "why": "C-40: WARM values unchecked (the U5b2 survivor); killer: WARM AB/A=zz",
+      "find": "if (wnf.length > 0) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C40f-valueNotNaN",
+      "group": "C-40",
+      "why": "C-40: a WARM value only not-NaN (Infinity passes); killer: WARM AA/A of 310 digits",
+      "find": "const wnf = l.slice(head.length).split(' ').filter((t) => /^[A-Z]+\\/A=/.test(t) && !Number.isFinite(num(t.slice(t.indexOf('=') + 1))));",
+      "replace": "const wnf = l.slice(head.length).split(' ').filter((t) => /^[A-Z]+\\/A=/.test(t) && Number.isNaN(num(t.slice(t.indexOf('=') + 1))));",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C40g-valueGatedOnly",
+      "group": "C-40",
+      "why": "C-40 guard: WARM values on gated lanes only; killer: REPORTED WARM AB/A=zz",
+      "find": "if (wnf.length > 0) shape.push(",
+      "replace": "if (wnf.length > 0 && Object.hasOwn(sp.gated, id)) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C41a-unknownOff",
+      "group": "C-41",
+      "why": "C-41: an unknown RAW column passes; killer: RAW extra column X",
+      "find": "if (unk.length > 0) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C41b-twiceOff",
+      "group": "C-41",
+      "why": "C-41: a repeated RAW column not named; killer: RAW AA printed twice",
+      "find": "if (twice.length > 0) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C41c-gatedOnly",
+      "group": "C-41",
+      "why": "C-41 guard: unknown RAW columns on gated lanes only; killer: REPORTED RAW extra column X",
+      "find": "if (unk.length > 0) shape.push(",
+      "replace": "if (unk.length > 0 && Object.hasOwn(sp.gated, id)) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51a-abOff",
+      "group": "C-51",
+      "why": "C-51: ab finiteness unchecked; killer: RESULT ab=zz",
+      "find": "for (const k of ['ab', 'B/AB']) {",
+      "replace": "for (const k of ['B/AB']) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51b-babOff",
+      "group": "C-51",
+      "why": "C-51: B/AB finiteness unchecked; killer: RESULT B/AB q3 NaN",
+      "find": "for (const k of ['ab', 'B/AB']) {",
+      "replace": "for (const k of ['ab']) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51c-gatedOnly",
+      "group": "C-51",
+      "why": "C-51 guard: the RESULT grammar on gated lanes only; killer: REPORTED ab=zz",
+      "find": "        if (rl !== null) {\n",
+      "replace": "        if (rl !== null && Object.hasOwn(sp.gated, id)) {\n",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51d-wordOff",
+      "group": "C-51",
+      "why": "C-51: printed wordAB vs its B/AB word unchecked; killer: wordAB=SLOWER over a WITHIN B/AB",
+      "find": "if (fin3(bab) && pAB !== wordG(bab)) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51e-twiceOff",
+      "group": "C-51",
+      "why": "C-51: bop printed twice passes; killer: bop printed twice",
+      "find": "if (bopF.length !== 1) shape.push(",
+      "replace": "if (bopF.length === 0) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51f-absentOff",
+      "group": "C-51",
+      "why": "C-51: an absent bop passes; killer: no bop field",
+      "find": "if (bopF.length !== 1) shape.push(",
+      "replace": "if (bopF.length > 1) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51g-numOff",
+      "group": "C-51",
+      "why": "C-51: bop entry values unchecked; killer: bop entry A:zz",
+      "find": "if (badNum.length > 0) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51h-numNotNaN",
+      "group": "C-51",
+      "why": "C-51: a bop value only not-NaN (310 digits pass); killer: bop B of 310 digits",
+      "find": "else if (!(Number.isFinite(num(v)) || v === 'Infinity')) badNum.push(e);",
+      "replace": "else if (Number.isNaN(num(v)) && v !== 'Infinity') badNum.push(e);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51i-infinityShape",
+      "group": "C-51",
+      "why": "C-51 / C-15: Infinity (allocBop disturbed window, an ALLOC outcome) made run shape; killer: the bop A:Infinity PASS control",
+      "find": "else if (!(Number.isFinite(num(v)) || v === 'Infinity')) badNum.push(e);",
+      "replace": "else if (!Number.isFinite(num(v))) badNum.push(e);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51j-unknownKeyOff",
+      "group": "C-51",
+      "why": "C-51: an unknown bop key passes; killer: bop key ab: added",
+      "find": "if (c < 0 || !BOP_KEYS.includes(k) || seen.includes(k)) badKey.push(e);",
+      "replace": "if (c < 0 || seen.includes(k)) badKey.push(e);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51k-repeatKeyOff",
+      "group": "C-51",
+      "why": "C-51: a repeated bop key passes; killer: bop 6 keys (A repeated)",
+      "find": "if (c < 0 || !BOP_KEYS.includes(k) || seen.includes(k)) badKey.push(e);",
+      "replace": "if (c < 0 || !BOP_KEYS.includes(k)) badKey.push(e);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C51l-missingKeyOff",
+      "group": "C-51",
+      "why": "C-51: a missing bop key passes; killer: bop 3 keys (SLOW dropped)",
+      "find": "if (miss.length > 0) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "M6-bopABprefix",
+      "group": "u5b3-review",
+      "why": "U5b3 reviewer M6: C-47 counts any AB-prefixed bop key as the AB entry; killer: the AB: entry renamed ABX:",
+      "find": ".filter((e) => e.startsWith('AB:'))",
+      "replace": ".filter((e) => e.startsWith('AB'))",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "M13-ABrepsUndefLabel",
+      "group": "u5b3-review",
+      "why": "U5b3 reviewer M13: the C-11 label misses an absent AB reps part; killer: the REPORTED-label test on reps A:4,B:1",
+      "find": "if (rm[3] === undefined || Number(rm[3]) !== Number(rm[2])) why.push(",
+      "replace": "if (rm[3] !== undefined && Number(rm[3]) !== Number(rm[2])) why.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "M14-bopLastOnly",
+      "group": "u5b3-review",
+      "why": "U5b3 reviewer M14: C-47 counts AB entries in the last bop field only; killer: the AB: entry in the first of two bop fields",
+      "find": ".filter((t) => t.startsWith('bop='))",
+      "replace": ".filter((t) => t.startsWith('bop=')).slice(-1)",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54a-dropA",
+      "group": "C-54",
+      "why": "C-54: A unchecked; killer: A=zz",
+      "find": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);",
+      "replace": "const RESULT_NUMS = Object.freeze([['B', '', ['B']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54b-dropB",
+      "group": "C-54",
+      "why": "C-54: B unchecked; killer: B=1.00 (no [lo..hi])",
+      "find": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);",
+      "replace": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54c-dropBA",
+      "group": "C-54",
+      "why": "C-54: B/A grammar unchecked; killer: B/A q1 Infinity",
+      "find": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);",
+      "replace": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54d-dropBmA",
+      "group": "C-54",
+      "why": "C-54: B-A unchecked; killer: B-A unit xx",
+      "find": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);",
+      "replace": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B/A', '', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54e-dropAa",
+      "group": "C-54",
+      "why": "C-54: aa grammar unchecked; killer: aa=zz",
+      "find": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);",
+      "replace": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['slow', '', ['A', 'SLOW']]]);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54f-dropSlow",
+      "group": "C-54",
+      "why": "C-54: slow grammar unchecked; killer: slow 2e0",
+      "find": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);",
+      "replace": "const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']]]);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54g-sfxOff",
+      "group": "C-54",
+      "why": "C-54: the B-A unit not required; killer: B-A unit xx",
+      "find": "const t = field(rl, k), x = t !== null && t.endsWith(sfx) ? t.slice(0, t.length - sfx.length) : null;",
+      "replace": "const t = field(rl, k), x = t !== null ? t.slice(0, t.length - sfx.length) : null;",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54h-nanNoVoid",
+      "group": "C-54",
+      "why": "C-54: NaN[NaN..NaN] accepted with no VOID NAN; killer: B/A NaN with no VOID NAN item",
+      "find": "(x === 'NaN[NaN..NaN]' && deps.some((c) => nanV.includes(c)))",
+      "replace": "(x === 'NaN[NaN..NaN]')",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54i-nanAnyVoid",
+      "group": "C-54",
+      "why": "C-54: any VOID NAN item excuses any field; killer: aa NaN with VOID=[NAN B]",
+      "find": "(x === 'NaN[NaN..NaN]' && deps.some((c) => nanV.includes(c)))",
+      "replace": "(x === 'NaN[NaN..NaN]' && nanV.length > 0)",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54j-numGatedOnly",
+      "group": "C-54",
+      "why": "C-54 guard: the number grammar on gated lanes only; killer: REPORTED A=zz",
+      "find": "if (!ok) shape.push(",
+      "replace": "if (!ok && Object.hasOwn(sp.gated, id)) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54k-wordOff",
+      "group": "C-54",
+      "why": "C-54: printed word vs its B/A word unchecked; killer: word=SLOWER over a WITHIN B/A",
+      "find": "if (pw !== ww) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54l-winOff",
+      "group": "C-54",
+      "why": "C-54: win unchecked; killer: win=64.5",
+      "find": "for (const k of ['win', 'spin']) {",
+      "replace": "for (const k of ['spin']) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54m-spinOff",
+      "group": "C-54",
+      "why": "C-54: spin unchecked; killer: spin field absent",
+      "find": "for (const k of ['win', 'spin']) {",
+      "replace": "for (const k of ['win']) {",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54n-intSigned",
+      "group": "C-54",
+      "why": "C-54: a minus sign accepted on win / spin; killer: spin=-8",
+      "find": "if (t === null || !/^\\d+$/.test(t)) shape.push(",
+      "replace": "if (t === null || !/^-?\\d+$/.test(t)) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54o-tagOff",
+      "group": "C-54",
+      "why": "C-54: the tag unchecked; killer: REPORTED lane tagged (gated)",
+      "find": "if (!rl.startsWith('RESULT lane=' + id + tag)) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54p-tagEither",
+      "group": "C-54",
+      "why": "C-54: either tag accepted on any lane; killer: REPORTED lane tagged (gated)",
+      "find": "if (!rl.startsWith('RESULT lane=' + id + tag)) shape.push(",
+      "replace": "if (!rl.startsWith('RESULT lane=' + id + ' (gated) ') && !rl.startsWith('RESULT lane=' + id + ' (reported) ')) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C54q-tagGatedOnly",
+      "group": "C-54",
+      "why": "C-54 guard: the tag on gated lanes only; killer: REPORTED lane tagged (gated)",
+      "find": "if (!rl.startsWith('RESULT lane=' + id + tag)) shape.push(",
+      "replace": "if (Object.hasOwn(sp.gated, id) && !rl.startsWith('RESULT lane=' + id + tag)) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C55a-negOff",
+      "group": "C-55",
+      "why": "C-55: a negative bop passes; killer: bop A:-0.0100",
+      "find": "else if (num(v) < 0) badNeg.push(e);",
+      "replace": "else if (false) badNeg.push(e);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C55b-negBoundary",
+      "group": "C-55",
+      "why": "C-55: <= 0 for < 0 (zero read negative); killer: bop A:-0.0000 PASS control (and every clean log)",
+      "find": "else if (num(v) < 0) badNeg.push(e);",
+      "replace": "else if (num(v) <= 0) badNeg.push(e);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C55c-negGatedOnly",
+      "group": "C-55",
+      "why": "C-55 guard: negative bop on gated lanes only; killer: REPORTED bop A:-0.0100",
+      "find": "if (badNeg.length > 0) shape.push(",
+      "replace": "if (badNeg.length > 0 && Object.hasOwn(sp.gated, id)) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C56a-setOff",
+      "group": "C-56",
+      "why": "C-56: the RESULT field set / order unchecked; killer: unknown field foo=1",
+      "find": "if (tk.join(' ') !== RESULT_FIELDS.join(' ')) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C56b-extraOk",
+      "group": "C-56",
+      "why": "C-56: extra fields pass (one more than the producer); killer: unknown field foo=1",
+      "find": "if (tk.join(' ') !== RESULT_FIELDS.join(' ')) shape.push(",
+      "replace": "if (tk.join(' ') !== RESULT_FIELDS.join(' ') && tk.length <= RESULT_FIELDS.length) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C56c-missingOk",
+      "group": "C-56",
+      "why": "C-56: a missing field passes (one fewer); killer: ns/op missing",
+      "find": "if (tk.join(' ') !== RESULT_FIELDS.join(' ')) shape.push(",
+      "replace": "if (tk.join(' ') !== RESULT_FIELDS.join(' ') && tk.length >= RESULT_FIELDS.length) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C56d-dupOk",
+      "group": "C-56",
+      "why": "C-56: a repeated field passes (set compare after dedup); killer: spin printed twice",
+      "find": "if (tk.join(' ') !== RESULT_FIELDS.join(' ')) shape.push(",
+      "replace": "if ([...new Set(tk)].join(' ') !== RESULT_FIELDS.join(' ')) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C56e-orderFree",
+      "group": "C-56",
+      "why": "C-56: order not checked (sorted compare); killer: win and reps swapped",
+      "find": "if (tk.join(' ') !== RESULT_FIELDS.join(' ')) shape.push(",
+      "replace": "if ([...tk].sort().join(' ') !== [...RESULT_FIELDS].sort().join(' ')) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C56f-voidTailOff",
+      "group": "C-56",
+      "why": "C-56: the VOID tail grammar unchecked; killer: VOID tail missing its ]",
+      "find": "if (vt >= 0 && !(rl.endsWith(']') && rl.indexOf(' VOID=[', vt + 1) < 0)) shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C56g-finiteOff",
+      "group": "C-56",
+      "why": "C-56: C-54 numbers NUM_RE only (310 digits pass); killer: A median of 310 digits",
+      "find": "((STAT_RE.test(x) && fin3(stat3(x))) || (x === 'NaN[NaN..NaN]'",
+      "replace": "((STAT_RE.test(x)) || (x === 'NaN[NaN..NaN]'",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "C56h-gatedOnly",
+      "group": "C-56",
+      "why": "C-56 guard: the field set on gated lanes only; killer: REPORTED unknown field foo=1",
+      "find": "if (tk.join(' ') !== RESULT_FIELDS.join(' ')) shape.push(",
+      "replace": "if (tk.join(' ') !== RESULT_FIELDS.join(' ') && Object.hasOwn(sp.gated, id)) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "R1-negBoundary",
+      "group": "u5c-review",
+      "why": "U5c reviewer R1: negative only below -0.005; killer: bop A:-0.0001",
+      "find": "else if (num(v) < 0) badNeg.push(e);",
+      "replace": "else if (num(v) < -0.005) badNeg.push(e);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-wordNoneOk",
+      "group": "u5c-review",
+      "why": "U5c reviewer R2: a NONE B/A excuses any printed word; killer: VOID NAN A with word=WITHIN",
+      "find": "if (pw !== ww) shape.push(",
+      "replace": "if (pw !== ww && ww !== 'NONE') shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "R3-partialNaN",
+      "group": "u5c-review",
+      "why": "U5c reviewer R3: any NaN in the triple excused by VOID NAN; killer: A=1.00[NaN..1.00] beside VOID=[NAN A]",
+      "find": "(x === 'NaN[NaN..NaN]' && deps.some((c) => nanV.includes(c)))",
+      "replace": "(/NaN/.test(x) && deps.some((c) => nanV.includes(c)))",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "R4-voidTwice",
+      "group": "u5c-review",
+      "why": "U5c reviewer R4: a second VOID tail passes; killer: two VOID tails",
+      "find": "if (vt >= 0 && !(rl.endsWith(']') && rl.indexOf(' VOID=[', vt + 1) < 0)) shape.push(",
+      "replace": "if (vt >= 0 && !(rl.endsWith(']'))) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "R11-signedInfinity",
+      "group": "u5c-review",
+      "why": "U5c reviewer R11: any value ending in Infinity passes as the allocBop value; killer: bop B:-Infinity",
+      "find": "else if (!(Number.isFinite(num(v)) || v === 'Infinity')) badNum.push(e);",
+      "replace": "else if (!(Number.isFinite(num(v)) || /Infinity$/.test(v))) badNum.push(e);",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
+      ]
+    },
+    {
+      "id": "B1-nsopKeyed",
+      "group": "u5c-review",
+      "why": "U5c review r1 blocker 1: the bare ns/op token check dropped (ns/op=1 reads as ns/op); killer: ns/op=1",
+      "find": "if (tk.join(' ') === RESULT_FIELDS.join(' ') && t5 !== 'ns/op') shape.push(",
+      "replace": "if (false) shape.push(",
+      "files": [
+        "test/parity.abgate.test.mjs",
+        "test/judge.rows.test.mjs",
+        "test/judge.extra.test.mjs"
       ]
     }
   ]

@@ -840,7 +840,16 @@ async function runLane(ctx, L, cols, K, inject) {
 // Exported (C-26) as judgeSpec (validated, frozen; C-13 / C-14 / C-4 / C-19 / C-27 / C-33) and verdictOf(spec, lines)
 // (pure: reads only its arguments and module constants). Two dialects (C-27):
 //   TOOL (dialect omitted): every check below, incl. the tool-only ones: the HEADER spec line (laneSha required, C-33),
-//     reps / AB / n-a (C-11), warm (RESULT warm=1, one WARM line per lane, RAW columns of exactly K values: C-12 / C-28)
+//     reps / AB / n-a (C-11), warm (RESULT warm=1, one WARM line per lane, RAW columns of exactly K values: C-12 / C-28;
+//     RAW AB / WARM AB/A exactly when reps differ and every RAW value a finite number: C-34; RESULT reps parsed once on
+//     every lane, gated or reported, else run shape: C-42; RESULT ab / B/AB / wordAB not n/a plus one bop AB entry exactly
+//     when reps differ, all three n/a and no bop AB entry when equal, on every lane, else run shape: C-47; the RESULT reps
+//     AB part present with n = B reps exactly when reps differ, on every lane, else run shape: C-50; WARM columns exactly
+//     A/A B/A AA/A SLOW/A [AB/A] in that order, each value finite: C-40; RAW columns exactly B/A AA SLOW [AB], each once:
+//     C-41; RESULT ab / B/AB finite where not n/a, wordAB = the word its B/AB reads, one bop field of known keys and numeric
+//     values, on every lane, else run shape: C-51; the rest of the RESULT line (A, B, B/A, B-A, aa, slow grammar with NaN only
+//     beside its VOID NAN item, word = its B/A word, win / spin integers, the tag as the spec gates the lane): C-54; a negative
+//     bop value: C-55; exactly the producer's RESULT fields in its order, C-54 numbers finite: C-56)
 //     and the provenance grammar (HEADER arch, PROV start / end as provenance() prints them).
 //   'ab-gate@7e0f9262' (API only): ab-gate 7e0f9262's verdictOf byte for byte (C-9): it skips exactly those four.
 // The judge recomputes every word with its OWN wordG and its own band comparisons (never the producer's word / aaOk /
@@ -854,7 +863,18 @@ const BOP_COLS = Object.freeze(['A', 'B', 'AA', 'SLOW']);
 // provenance() (below) prints: PROV <tag> <ISO time> load <1m> <5m> <15m> busy-node [<ps rows>] quiet-lock <host>
 const PROV_RE = /^PROV (start|end) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) load \d+\.\d{2} \d+\.\d{2} \d+\.\d{2} busy-node \[.*\] quiet-lock \S+$/;
 const WARM_HEAD = ' round 0 (discarded, not in any median) ';
-const WARM_COLS_RE = /^[A-Z]+\/A=\S+( [A-Z]+\/A=\S+)*$/;
+// C-40: the WARM columns, exactly A/A B/A AA/A SLOW/A in that order, then AB/A (how many AB/A is C-34's count, so a
+// twice-printed AB/A keeps its C-34 reason); each value NUM_RE / finite is a separate check in warmShape
+const WARM_COLS_RE = /^A\/A=\S+ B\/A=\S+ AA\/A=\S+ SLOW\/A=\S+( AB\/A=\S+)*$/;
+const RAW_COLS = Object.freeze(['B/A', 'AA', 'SLOW', 'AB']);   // C-41: the RAW column set (AB exactly when reps differ: C-34)
+const BOP_KEYS = Object.freeze([...BOP_COLS, 'AB']);           // C-51: the bop key set (the AB entry's count is C-47's)
+// C-54: the RESULT number fields as runLane prints them (fmtS + unit suffix), each with the columns whose VOID NAN item
+// (runLane: 'NAN <col>' when a column's rounds are not finite) is the only way that field may print NaN[NaN..NaN]
+const STAT_RE = /^-?\d+(\.\d+)?\[-?\d+(\.\d+)?\.\.-?\d+(\.\d+)?\]$/;
+// C-56: the RESULT fields after 'RESULT lane=<id> <tag>', exactly these, each once, in this order (a literal, written from
+// runLane's RESULT print and checked against the real logs; never derived from that print); then optionally ' VOID=[..]' last
+const RESULT_FIELDS = Object.freeze(['A', 'B', 'ns/op', 'B/A', 'word', 'B-A', 'aa', 'slow', 'ab', 'B/AB', 'wordAB', 'bop', 'win', 'reps', 'spin', 'warm']);
+const RESULT_NUMS = Object.freeze([['A', '', ['A']], ['B', '', ['B']], ['B/A', '', ['A', 'B']], ['B-A', 'ns', ['A', 'B']], ['aa', '', ['A', 'AA']], ['slow', '', ['A', 'SLOW']]]);
 function judgeFail(msg) { throw new Error('judgeSpec: ' + msg); }
 const isPlain = (o) => o !== null && typeof o === 'object' && !Array.isArray(o) && (Object.getPrototypeOf(o) === Object.prototype || Object.getPrototypeOf(o) === null) && Object.getOwnPropertySymbols(o).length === 0;
 /** judgeSpec({ laneIds, gated, shape?, K?, C?, run?, laneSha, dialect? }) -> a frozen judging spec. Throws an Error naming
@@ -1000,8 +1020,14 @@ function laneStateG(tool, id, line, voidKinds) {
     if (printed !== w) why.push('printed word=' + printed + ' but B/A ' + fmtS(ratio, 3) + ' reads ' + w);
     return { id, word: printed, ratio, clean: why.length === 0, why };
 }
-/** TOOL only (C-12 / C-28): RESULT warm=1, exactly one WARM line and one RAW line per lane, every RAW column (B/A, AA,
- *  SLOW, and AB when printed) holding exactly K values. Appends run-shape reasons to `shape`. */
+/** TOOL only (C-12 / C-28 / C-34 / C-42): RESULT warm=1, exactly one WARM line and one RAW line per lane, every RAW column
+ *  (B/A, AA, SLOW, and AB when printed) holding exactly K values, each a finite number (NUM_RE); RAW AB and WARM AB/A
+ *  present exactly when that lane's RESULT reps differ (C-11 on every line family); a RESULT reps field unparsed or
+ *  printed twice on any lane (C-42); RESULT ab / B/AB / wordAB and the bop AB entry against that lane's reps (C-47); the
+ *  RESULT reps AB part against that lane's reps (C-50); the WARM column grammar and finite values (C-40); the RAW column
+ *  set (C-41); the RESULT ab / B/AB / wordAB / bop grammar on every lane (C-51); the rest of the RESULT line (C-54); a
+ *  negative bop value (C-55); the RESULT field set / order and finite C-54 numbers (C-56).
+ *  Appends run-shape reasons to `shape`. */
 function warmShape(sp, lines, res, shape) {
     const ids = sp.laneIds;
     const warmBad = [];
@@ -1027,17 +1053,120 @@ function warmShape(sp, lines, res, shape) {
     wantOne(warm, 'WARM');
     wantOne(raw, 'RAW');
     for (const id of ids) {
+        // C-34: whether this lane's reps differ, read from its one RESULT line's reps field (the grammar laneStateG
+        // checks). C-42: a lane with one RESULT whose reps field is missing, printed twice (field() reads null) or off
+        // that grammar leaves the AB rule unverifiable -> run shape on ANY lane, gated or reported (a reported lane's
+        // NOT-CLEAN label never reaches the verdict; C-14, null is not zero). No / several RESULT lines are run shape
+        // above, so rl === null adds no reason here. differ === null skips the AB checks below (already NO VERDICT).
+        const rl = res.has(id) && res.get(id).length === 1 ? res.get(id)[0] : null, rt = rl === null ? null : field(rl, 'reps');
+        const rr = rt === null ? null : /^A:(\d+),B:(\d+)(?:,AB:(\d+))?$/.exec(rt);
+        if (rl !== null && rr === null) {
+            const nReps = rl.split(' reps=').length - 1;
+            shape.push('RESULT lane=' + id + ' reps ' + (nReps >= 2 ? 'printed ' + nReps + ' times' : rt + ' unparsed (want A:<n>,B:<n>[,AB:<n>])') + ' (C-42: the C-34 AB rule is unverifiable)');
+        }
+        const differ = rr === null ? null : Number(rr[1]) !== Number(rr[2]);
+        // C-47: the same AB rule on the RESULT line of ANY lane, gated or reported (a reported lane's NOT-CLEAN label never
+        // reaches the verdict): reps differ -> ab, B/AB and wordAB each present once (field() null = absent or printed
+        // twice) and not n/a, and exactly one AB: entry over the line's bop fields; equal reps -> all three exactly n/a and
+        // no bop AB entry. The values are C-51 below (run shape); REPS-DRIFT stays a C-11 lane label (laneStateG, C-15).
+        if (rl !== null && differ !== null) {
+            for (const k of ['ab', 'B/AB', 'wordAB']) {
+                const v = field(rl, k);
+                if (differ === true && (v === null || v === 'n/a')) shape.push('RESULT lane=' + id + ' ' + k + (v === null ? ' missing or printed twice' : '=n/a') + ' with reps ' + rt + ' (C-47: reps differ -> ab, B/AB, wordAB once each, not n/a)');
+                if (differ === false && v !== 'n/a') shape.push('RESULT lane=' + id + ' ' + k + (v === null ? ' missing or printed twice' : '=' + v) + ' with equal reps ' + rt + ' (C-47: want n/a)');
+            }
+            const nBab = rl.split(' ').filter((t) => t.startsWith('bop=')).reduce((s, t) => s + t.slice(4).split(',').filter((e) => e.startsWith('AB:')).length, 0);
+            if (differ === true && nBab !== 1) shape.push('RESULT lane=' + id + ' bop holds ' + nBab + ' AB: entries with reps ' + rt + ' (C-47: reps differ -> exactly one)');
+            if (differ === false && nBab !== 0) shape.push('RESULT lane=' + id + ' bop holds ' + nBab + ' AB: entries with equal reps ' + rt + ' (C-47: want none)');
+        }
+        // C-50: the RESULT reps AB part follows C-11 on ANY lane, gated or reported: reps differ -> AB:<n> present with
+        // n = B reps; equal reps -> no AB part. Run shape (same reasoning as C-42 / C-47); laneStateG keeps its C-11 label.
+        if (rr !== null) {
+            if (differ === true && (rr[3] === undefined || Number(rr[3]) !== Number(rr[2]))) shape.push('RESULT lane=' + id + ' reps ' + rt + ' AB part ' + (rr[3] === undefined ? 'missing' : rr[3] + ' != B reps ' + rr[2]) + ' (C-50: reps differ -> AB:<B reps>)');
+            if (differ === false && rr[3] !== undefined) shape.push('RESULT lane=' + id + ' reps ' + rt + ' AB part with equal reps (C-50: want none)');
+        }
+        // C-51: the RESULT values' grammar on ANY lane, gated or reported: ab and B/AB finite where not n/a (when n/a is right
+        // is C-47's); the printed wordAB = the word its finite B/AB reads (the judge's own wordG); bop printed exactly once,
+        // each entry <KEY>:<NUM_RE finite> or <KEY>:Infinity (allocBop's disturbed-window value, an ALLOC outcome), keys A, B,
+        // AA, SLOW once each plus AB (its count against reps is C-47's). Run shape. The outcomes stay laneStateG labels
+        // (C-15): REPS-DRIFT, ALLOC bop >= 1/64 (Infinity included, C-55); a negative bop is grammar (C-55).
+        if (rl !== null) {
+            for (const k of ['ab', 'B/AB']) {
+                const v = field(rl, k);
+                if (v !== null && v !== 'n/a' && !fin3(stat3(v))) shape.push('RESULT lane=' + id + ' ' + k + '=' + v + ' not finite (C-51)');
+            }
+            const bab = stat3(field(rl, 'B/AB')), pAB = field(rl, 'wordAB');
+            if (fin3(bab) && pAB !== wordG(bab)) shape.push('RESULT lane=' + id + ' printed wordAB=' + pAB + ' but B/AB ' + fmtS(bab, 3) + ' reads ' + wordG(bab) + ' (C-51)');
+            const bopF = rl.split(' ').filter((t) => t.slice(0, 4) === 'bop=');
+            if (bopF.length !== 1) shape.push('RESULT lane=' + id + ' bop ' + (bopF.length === 0 ? 'missing' : 'printed ' + bopF.length + ' times') + ' (C-51: one bop field)');
+            const seen = [], badKey = [], badNum = [], badNeg = [];
+            for (const e of (bopF.length === 1 ? bopF[0].slice(4).split(',') : [])) {
+                const c = e.indexOf(':'), k = c < 0 ? e : e.slice(0, c), v = e.slice(c + 1);
+                if (c < 0 || !BOP_KEYS.includes(k) || seen.includes(k)) badKey.push(e);
+                else if (!(Number.isFinite(num(v)) || v === 'Infinity')) badNum.push(e);
+                else if (num(v) < 0) badNeg.push(e);
+                seen.push(k);
+            }
+            const miss = bopF.length === 1 ? BOP_COLS.filter((k) => !seen.includes(k)) : [];
+            if (badKey.length > 0) shape.push('RESULT lane=' + id + ' bop entry ' + badKey.join(',') + ' unknown or repeated key (C-51: keys ' + BOP_KEYS.join(', ') + ' once each)');
+            if (miss.length > 0) shape.push('RESULT lane=' + id + ' bop has no ' + miss.join(',') + ' entry (C-51)');
+            if (badNum.length > 0) shape.push('RESULT lane=' + id + ' bop entry ' + badNum.join(',') + ' not a number (C-51)');
+            if (badNeg.length > 0) shape.push('RESULT lane=' + id + ' bop entry ' + badNeg.join(',') + ' negative (C-55: allocBop prints >= 0 or Infinity)');
+            // C-54: the rest of the RESULT line, any lane: A, B, B/A, B-A, aa, slow in fmtS grammar (NUM_RE[NUM_RE..NUM_RE] + unit),
+            // NaN[NaN..NaN] only beside the VOID NAN item of a column that field is computed from; the printed word = the word its
+            // B/A reads (wordG; NaN reads NONE, as runLane's word() prints); win and spin integers; the tag as the spec gates the lane.
+            const vt = rl.indexOf(' VOID=['), nanV = vt < 0 ? [] : rl.slice(vt + 7).replace(/\]$/, '').split('; ').filter((v) => /^NAN [A-Z]+$/.test(v)).map((v) => v.slice(4));
+            for (const [k, sfx, deps] of RESULT_NUMS) {
+                const t = field(rl, k), x = t !== null && t.endsWith(sfx) ? t.slice(0, t.length - sfx.length) : null;
+                const ok = x !== null && ((STAT_RE.test(x) && fin3(stat3(x))) || (x === 'NaN[NaN..NaN]' && deps.some((c) => nanV.includes(c))));
+                if (!ok) shape.push('RESULT lane=' + id + ' ' + k + '=' + t + ' off grammar (C-54 / C-56: finite <num>[<num>..<num>]' + sfx + ', NaN only with VOID NAN ' + deps.join(' or ') + ')');
+            }
+            const pw = field(rl, 'word'), ww = wordG(stat3(field(rl, 'B/A')));
+            if (pw !== ww) shape.push('RESULT lane=' + id + ' printed word=' + pw + ' but B/A reads ' + ww + ' (C-54)');
+            for (const k of ['win', 'spin']) {
+                const t = field(rl, k);
+                if (t === null || !/^\d+$/.test(t)) shape.push('RESULT lane=' + id + ' ' + k + '=' + t + ' not an integer (C-54)');
+            }
+            // C-56: exactly the producer's fields, each once, in its order; a VOID=[..] tail only once and at the end
+            const tk = (vt < 0 ? rl : rl.slice(0, vt)).split(' ').slice(3).map((t) => (t.includes('=') ? t.slice(0, t.indexOf('=')) : t));
+            if (tk.join(' ') !== RESULT_FIELDS.join(' ')) shape.push('RESULT lane=' + id + ' fields ' + tk.join(',') + ' (C-56: want exactly ' + RESULT_FIELDS.join(',') + ', each once, in that order)');
+            const t5 = (vt < 0 ? rl : rl.slice(0, vt)).split(' ')[5];   // review r1: ns/op is a bare token, never a keyed field
+            if (tk.join(' ') === RESULT_FIELDS.join(' ') && t5 !== 'ns/op') shape.push('RESULT lane=' + id + ' ns/op token ' + t5 + ' (C-56: the bare unit token ns/op)');
+            if (vt >= 0 && !(rl.endsWith(']') && rl.indexOf(' VOID=[', vt + 1) < 0)) shape.push('RESULT lane=' + id + ' VOID tail unparsed (C-56: one VOID=[..] at the end of the line)');
+            const tag = Object.hasOwn(sp.gated, id) ? ' (gated) ' : ' (reported) ';
+            if (!rl.startsWith('RESULT lane=' + id + tag)) shape.push('RESULT lane=' + id + ' tag is not' + tag.slice(0, -1) + ' (C-54: the tag matches the spec)');
+        }
         if (warm.has(id) && warm.get(id).length === 1) {
             const l = warm.get(id)[0], head = 'WARM lane=' + id + WARM_HEAD;
-            if (!l.startsWith(head) || !WARM_COLS_RE.test(l.slice(head.length))) shape.push('WARM lane=' + id + ' line unparsed');
+            if (!l.startsWith(head) || !WARM_COLS_RE.test(l.slice(head.length))) shape.push('WARM lane=' + id + ' line unparsed (C-40: want A/A B/A AA/A SLOW/A [AB/A] in that order)');
+            else {
+                // C-40: every <COL>/A= value NUM_RE and finite, any lane (read per token, apart from the column grammar above)
+                const wnf = l.slice(head.length).split(' ').filter((t) => /^[A-Z]+\/A=/.test(t) && !Number.isFinite(num(t.slice(t.indexOf('=') + 1))));
+                if (wnf.length > 0) shape.push('WARM lane=' + id + ' value ' + wnf.join(' ') + ' not a finite number (C-40)');
+                if (differ !== null) {
+                    const nWab = l.slice(head.length).split(' ').filter((t) => t.startsWith('AB/A=')).length;
+                    if (differ === true && nWab !== 1) shape.push('WARM lane=' + id + ' AB/A column ' + (nWab === 0 ? 'missing' : 'printed ' + nWab + ' times') + ' with reps ' + rt + ' (C-34: reps differ -> one AB/A)');
+                    if (differ === false && nWab !== 0) shape.push('WARM lane=' + id + ' AB/A column with equal reps ' + rt + ' (C-34: want none)');
+                }
+            }
         }
         if (raw.has(id) && raw.get(id).length === 1) {
             const l = raw.get(id)[0];
+            // C-41: the RAW columns are exactly B/A AA SLOW [AB], each once, any lane (a token with no '=' is its own name)
+            const rn = l.slice(('RAW lane=' + id + ' ').length).split(' ').map((t) => (t.includes('=') ? t.slice(0, t.indexOf('=')) : t));
+            const unk = rn.filter((c) => !RAW_COLS.includes(c));
+            if (unk.length > 0) shape.push('RAW lane=' + id + ' column ' + unk.map((c) => JSON.stringify(c)).join(',') + ' unknown (C-41: want exactly B/A AA SLOW [AB])');
+            const twice = RAW_COLS.filter((c) => rn.indexOf(c) !== rn.lastIndexOf(c));
+            if (twice.length > 0) shape.push('RAW lane=' + id + ' column ' + twice.join(',') + ' printed more than once (C-41)');
+            if (differ === true && field(l, 'AB') === null) shape.push('RAW lane=' + id + ' AB column missing with reps ' + rt + ' (C-34: reps differ -> AB of K values)');
+            if (differ === false && l.includes(' AB=')) shape.push('RAW lane=' + id + ' AB column with equal reps ' + rt + ' (C-34: want none)');
             for (const c of ['B/A', 'AA', 'SLOW', 'AB']) {
                 const t = field(l, c);
                 if (t === null) { if (c !== 'AB') shape.push('RAW lane=' + id + ' ' + c + ' column missing'); continue; }
                 const vs = t.split(',');
                 if (vs.length !== sp.K || vs.some((v) => v === '')) shape.push('RAW lane=' + id + ' ' + c + ' holds ' + vs.length + ' values (want K=' + sp.K + ')');
+                const nf = vs.find((v) => !Number.isFinite(num(v)));
+                if (nf !== undefined) shape.push('RAW lane=' + id + ' ' + c + ' value ' + JSON.stringify(nf) + ' not a finite number (C-34 / C-14)');
             }
         }
     }
@@ -1172,7 +1301,7 @@ function finishOpts(o) {
     if (o.selftest && (o.oracleOnly || o.run !== null || o.kGiven)) stop('CLI', '--selftest takes no other flag');
     if (o.selftestUntimed === true && (o.selftest || o.oracleOnly || o.run !== null || o.kGiven)) stop('CLI', '--selftest-untimed takes no other flag');
     if (o.oracleOnly && o.run === null) o.run = 'ALL';
-    if (!o.selftest && o.selftestUntimed !== true && o.verdictFile === null && o.run === null) stop('CLI', 'give --run ALL|<ids> [--K k], --oracle-only, --selftest or --verdict-file <log|->');
+    if (!o.selftest && o.selftestUntimed !== true && o.verdictFile === null && o.run === null) stop('CLI', 'give --run ALL|<ids> [--K k], --oracle-only, --selftest, --selftest-untimed or --verdict-file <log|->');
     if (o.kGiven && (!Number.isInteger(o.K) || !(o.K >= 1 && o.K <= K_MAX))) stop('CLI', '--K 1..51');
     return o;
 }
@@ -1234,10 +1363,12 @@ function synthLog(sp, name, frozenNames) {
         ' B-A=0.00[0.00..0.00]ns aa=' + (o.aa ?? '1.000[0.990..1.010]') + ' slow=' + (o.slow ?? '2.000[1.900..2.100]') + ' ab=' + (o.ab ?? 'n/a') + ' B/AB=' + (o.bab ?? 'n/a') + ' wordAB=' + (o.wab ?? 'n/a') +
         ' bop=' + (o.bop ?? BOP4) + ' win=1 reps=' + (o.reps ?? 'A:1,B:1') + ' spin=1' + (o.warm ?? ' warm=1') + (o.tail ?? '');
     const rawOf = (n) => new Array(n).fill('1.0000').join(',');
+    // C-34: a patch whose reps differ (A:a,B:b, a != b) also prints the RAW AB column (K values) and the WARM AB/A column
+    const repsDiffer = (o) => { const m = /^A:(\d+),B:(\d+)(?:,AB:(\d+))?$/.exec(o.reps ?? ''); return m !== null && Number(m[1]) !== Number(m[2]); };
     const laneLines = (id, o) => {
-        const r = rawOf(o.rawN ?? sp.K);
-        return [res(id, o), 'RAW lane=' + id + ' B/A=' + r + ' AA=' + r + ' SLOW=' + r,
-            'WARM lane=' + id + ' round 0 (discarded, not in any median) A/A=1.0000 B/A=1.0000 AA/A=1.0000 SLOW/A=2.0000'];
+        const r = rawOf(o.rawN ?? sp.K), ab = repsDiffer(o);
+        return [res(id, o), 'RAW lane=' + id + ' B/A=' + r + ' AA=' + r + ' SLOW=' + r + (ab ? ' AB=' + r : ''),
+            'WARM lane=' + id + ' round 0 (discarded, not in any median) A/A=1.0000 B/A=1.0000 AA/A=1.0000 SLOW/A=2.0000' + (ab ? ' AB/A=1.0000' : '')];
     };
     const lines = (patch = {}) => [head, specLine, provS, ...ids.flatMap((id) => laneLines(id, { w: want(id), ...(patch[id] || {}) })), provE];
     return { RAT, BOP4, want, head, specLine, provS, provE, res, lines };
@@ -1284,8 +1415,8 @@ function judgeRows(sp) {
         ['judge (d) ' + gN + ' slow 1.200[1.150..1.250]', lines(P({ slow: '1.200[1.150..1.250]' })), 2, NVG, gN + ' slow 1.200[1.150..1.250] not med'],
         ['judge (e) ' + gN + ' bop B:0.0200', lines(P({ bop: 'A:0.0000,B:0.0200,AA:0.0000,SLOW:0.0000' })), 2, NVG, gN + ' bop A:0.0000,B:0.0200'],
         ['judge (f) ' + gN + ' slow q1 1.050', lines(P({ slow: '2.000[1.050..2.100]' })), 2, NVG, gN + ' slow 2.000[1.050..2.100] not med'],
-        ['judge (g) ' + gN + ' B/A q3 NaN', lines(P({ ba: RAT[wN].replace(/\.\.[^\]]*\]$/, '..NaN]') })), 2, NVG, gN + ' B/A not finite'],
-        ['judge (h) ' + gN + ' printed word ' + other + ', numbers kept', lines(P({ word: other })), 2, NVG, gN + ' printed word=' + other],
+        ['judge (g) ' + gN + ' B/A q3 NaN', lines(P({ ba: RAT[wN].replace(/\.\.[^\]]*\]$/, '..NaN]') })), 2, NVS, 'RESULT lane=' + gN + ' B/A=' + RAT[wN].replace(/\.\.[^\]]*\]$/, '..NaN]') + ' off grammar (C-54'],
+        ['judge (h) ' + gN + ' printed word ' + other + ', numbers kept', lines(P({ word: other })), 2, NVS, 'RESULT lane=' + gN + ' printed word=' + other + ' but B/A reads ' + wN + ' (C-54'],
         ['judge (j) FINDING ' + g0 + ' + VOID NOT-TF line on ' + gN, voidLine(lines({ [g0]: { w: flip } })), 3, 'VERDICT FINDING wrong-gated=[' + g0 + ' ' + flip, gN + ' VOID-line(NOT-TF)'],
         // (i) run shape 12, each naming itself
         ['judge (i) K=7', edit(lines(), ' K=' + K + ' ', ' K=7 '), 2, NVS, 'K=7 (want ' + K + ')'],
@@ -1303,18 +1434,18 @@ function judgeRows(sp) {
         // C-11 (Q-REPS-2) 14: rows (i)-(v), AB bop, equal reps, AB reps, B/AB NaN, B above A, unparsed, forged
         ['judge Q-REPS (i) ' + gN + ' ab 1.818 (REPORTED) + B/AB agreeing', lines(P(AB_OK)), 0, 'VERDICT PASS', null],
         ['judge Q-REPS (ii) ' + gN + ' B/AB reads ' + wAlt + ' vs B/A ' + wN, lines(P({ ...AB_OK, bab: RAT[wAlt], wab: wAlt })), 2, NVG, gN + ' REPS-DRIFT B/AB ' + RAT[wAlt] + ' reads ' + wAlt],
-        ['judge Q-REPS (iii) ' + gN + ' reps differ, B/AB missing', lines(P({ ...AB_OK, bab: 'n/a', wab: 'n/a' })), 2, NVG, gN + ' B/AB n/a not finite with reps A:4 != B:1'],
-        ['judge Q-REPS (iv) ' + gN + ' printed wordAB=' + wN + ' but B/AB numbers read ' + wAlt, lines(P({ ...AB_OK, bab: RAT[wAlt], wab: wN })), 2, NVG, gN + ' printed wordAB=' + wN + ' but B/AB'],
+        ['judge Q-REPS (iii) ' + gN + ' reps differ, B/AB missing', lines(P({ ...AB_OK, bab: 'n/a', wab: 'n/a' })), 2, NVS, 'RESULT lane=' + gN + ' B/AB=n/a with reps A:4,B:1,AB:1 (C-47'],
+        ['judge Q-REPS (iv) ' + gN + ' printed wordAB=' + wN + ' but B/AB numbers read ' + wAlt, lines(P({ ...AB_OK, bab: RAT[wAlt], wab: wN })), 2, NVS, 'RESULT lane=' + gN + ' printed wordAB=' + wN + ' but B/AB ' + RAT[wAlt] + ' reads ' + wAlt + ' (C-51'],
         ['judge Q-REPS (v) ' + gN + ' B/AB median exactly 1.050 (WITHIN) vs B/A clearly SLOWER', lines(P({ ...AB_OK, ba: RAT.SLOWER, word: 'SLOWER', bab: '1.050[1.040..1.060]', wab: 'WITHIN' })), 2, NVG, gN + ' REPS-DRIFT B/AB 1.050[1.040..1.060] reads WITHIN but B/A 1.500[1.490..1.510] reads SLOWER'],
-        ['judge Q-REPS ' + gN + ' reps differ, no AB bop', lines(P({ ...AB_OK, bop: BOP4 })), 2, NVG, gN + ' bop ' + BOP4 + ' not A, B, AA, SLOW, AB'],
-        ['judge Q-REPS ' + gN + ' equal reps with a finite B/AB', lines(P({ bab: '1.000[0.990..1.010]' })), 2, NVG, gN + ' B/AB=1.000[0.990..1.010] with equal reps'],
-        ['judge Q-REPS ' + gN + ' AB timed at A\'s reps (A:4,B:1,AB:4)', lines(P({ ...AB_OK, reps: 'A:4,B:1,AB:4' })), 2, NVG, gN + ' AB reps 4 (want B:1)'],
-        ['judge Q-REPS ' + gN + ' reps differ, AB reps not printed', lines(P({ ...AB_OK, reps: 'A:4,B:1' })), 2, NVG, gN + ' AB reps undefined (want B:1)'],
-        ['judge Q-REPS ' + gN + ' equal reps with an AB reps field', lines(P({ reps: 'A:1,B:1,AB:1' })), 2, NVG, gN + ' AB reps 1 with equal reps'],
-        ['judge Q-REPS ' + gN + ' B/AB q3 NaN', lines(P({ ...AB_OK, bab: '1.000[0.990..NaN]' })), 2, NVG, gN + ' B/AB 1.000[0.990..NaN] not finite'],
+        ['judge Q-REPS ' + gN + ' reps differ, no AB bop', lines(P({ ...AB_OK, bop: BOP4 })), 2, NVS, 'RESULT lane=' + gN + ' bop holds 0 AB: entries with reps A:4,B:1,AB:1 (C-47'],
+        ['judge Q-REPS ' + gN + ' equal reps with a finite B/AB', lines(P({ bab: '1.000[0.990..1.010]' })), 2, NVS, 'RESULT lane=' + gN + ' B/AB=1.000[0.990..1.010] with equal reps A:1,B:1 (C-47'],
+        ['judge Q-REPS ' + gN + ' AB timed at A\'s reps (A:4,B:1,AB:4)', lines(P({ ...AB_OK, reps: 'A:4,B:1,AB:4' })), 2, NVS, 'RESULT lane=' + gN + ' reps A:4,B:1,AB:4 AB part 4 != B reps 1 (C-50'],
+        ['judge Q-REPS ' + gN + ' reps differ, AB reps not printed', lines(P({ ...AB_OK, reps: 'A:4,B:1' })), 2, NVS, 'RESULT lane=' + gN + ' reps A:4,B:1 AB part missing (C-50'],
+        ['judge Q-REPS ' + gN + ' equal reps with an AB reps field', lines(P({ reps: 'A:1,B:1,AB:1' })), 2, NVS, 'RESULT lane=' + gN + ' reps A:1,B:1,AB:1 AB part with equal reps (C-50'],
+        ['judge Q-REPS ' + gN + ' B/AB q3 NaN', lines(P({ ...AB_OK, bab: '1.000[0.990..NaN]' })), 2, NVS, 'RESULT lane=' + gN + ' B/AB=1.000[0.990..NaN] not finite (C-51'],
         ['judge Q-REPS ' + gN + ' B\'s reps above A\'s (A:1,B:4,AB:4)', lines(P({ ...AB_OK, reps: 'A:1,B:4,AB:4' })), 0, 'VERDICT PASS', null],
-        ['judge Q-REPS ' + gN + ' reps unparsed', lines(P({ reps: 'A:1' })), 2, NVG, gN + ' reps A:1 unparsed'],
-        ['judge Q-REPS ' + gN + ' forged AB:1/4', lines(P({ ...AB_OK, reps: 'A:4,B:1,AB:1/4' })), 2, NVG, gN + ' reps A:4,B:1,AB:1/4 unparsed'],
+        ['judge Q-REPS ' + gN + ' reps unparsed', lines(P({ reps: 'A:1' })), 2, NVS, gN + ' reps A:1 unparsed'],
+        ['judge Q-REPS ' + gN + ' forged AB:1/4', lines(P({ ...AB_OK, reps: 'A:4,B:1,AB:1/4' })), 2, NVS, gN + ' reps A:4,B:1,AB:1/4 unparsed'],
         // C-12 / C-28 (warm) 4
         ['judge warm ' + gN + ' RESULT warm=0', lines(P({ warm: ' warm=0' })), 2, NVS, 'RESULT warm=1 missing for 1 lane(s) ' + gN + ' (warm=0)'],
         ['judge warm ' + gN + ' RESULT warm field missing', lines(P({ warm: '' })), 2, NVS, 'RESULT warm=1 missing for 1 lane(s) ' + gN + ' (no warm field)'],
@@ -1335,8 +1466,8 @@ function judgeRows(sp) {
         ['judge B7 ' + gN + ' B/A q1 exactly 1.000, WITHIN', lines(P({ ba: '1.100[1.000..1.200]', word: 'WITHIN' })), wordExit, wordPre, null],
         ['judge B8 ' + gN + ' B/A median exactly 0.950, WITHIN', lines(P({ ba: '0.950[0.940..0.960]', word: 'WITHIN' })), wordExit, wordPre, null],
         ['judge B9 ' + gN + ' B/A q3 exactly 1.000, WITHIN', lines(P({ ba: '0.900[0.800..1.000]', word: 'WITHIN' })), wordExit, wordPre, null],
-        ['judge B10 ' + gN + ' aa q1 literal Infinity', lines(P({ aa: '1.001[Infinity..1.003]' })), 2, NVG, gN + ' aa 1.001[NaN..1.003] not finite'],
-        ['judge B10b ' + gN + ' slow median 1e309 digits (overflows to Infinity)', lines(P({ slow: '1' + '0'.repeat(309) + '[1.900..2.100]' })), 2, NVG, gN + ' slow Infinity[1.900..2.100] not finite'],
+        ['judge B10 ' + gN + ' aa q1 literal Infinity', lines(P({ aa: '1.001[Infinity..1.003]' })), 2, NVS, 'RESULT lane=' + gN + ' aa=1.001[Infinity..1.003] off grammar (C-54'],
+        ['judge B10b ' + gN + ' slow median 1e309 digits (overflows to Infinity)', lines(P({ slow: '1' + '0'.repeat(309) + '[1.900..2.100]' })), 2, NVS, 'RESULT lane=' + gN + ' slow=1' + '0'.repeat(309) + '[1.900..2.100] off grammar (C-54 / C-56'],
         ['judge B11 ' + gN + ' bop A exactly -0 (>= 0 boundary)', lines(P({ bop: 'A:-0.0000,B:0.0000,AA:0.0000,SLOW:0.0000' })), 0, 'VERDICT PASS', null],
     ];
 }
@@ -1584,7 +1715,7 @@ export async function runGate(gateFile, opts) {
         if (run !== undefined && typeof run !== 'string') stop('CLI', 'runGate: run must be a string (ALL or lane ids)');
         if (oracleOnly !== undefined && typeof oracleOnly !== 'boolean') stop('CLI', 'runGate: oracleOnly must be a boolean');
         const opt = finishOpts({ laneFile: gateFile, run: run === undefined ? null : run, K: K === undefined ? null : K, kGiven: K !== undefined,
-            selftest: false, oracleOnly: oracleOnly === true, verdictFile: null });
+            selftest: false, selftestUntimed: false, oracleOnly: oracleOnly === true, verdictFile: null });
         return main(ctx, opt);
     });
 }
