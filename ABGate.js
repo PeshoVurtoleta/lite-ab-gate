@@ -17,6 +17,7 @@
 //   node $FLAGS ABGate.js <gate-file.mjs> --run <ids> [--K k]     a subset / research run (always NO VERDICT: wrong shape)
 //   node $FLAGS ABGate.js <gate-file.mjs> --oracle-only           every lane built: oracle + fold + TF + workFloor, no clock
 //   node $FLAGS ABGate.js <gate-file.mjs> --selftest              `SELFTEST all ok` (0) or FAIL (1)
+//   node $FLAGS ABGate.js <gate-file.mjs> --selftest-untimed      the untimed rows only (67, no clock; npm test): 0 / 1
 //   node        ABGate.js <gate-file.mjs> --verdict-file <log|->  the verdict of a saved log (untimed, no flags)
 //   API: runGate(gateFile, { run, K, oracleOnly, out }) -> Promise<0|1|2|3>; defineGate(spec) -> deep-frozen spec;
 //        verdictOf(judgeSpec({...}), lines) -> { code, reported, text } (pure).
@@ -75,22 +76,30 @@ export const AA_LO = 0.95;
 export const AA_HI = 1.05;
 export const SLOW_MED = 1.25;
 export const SLOW_Q1 = 1.10;
+// J2 (C-21, X5): every marker is an anchored, multiline, non-global RegExp over the ONE line the tool prints for that
+// failure (site, column and lane named), so it matches only its own rendered message: a bare substring such as
+// 'STOP ORACLE' also matched the late-bend / post-bend / arr-bend STOPs, and 'WARM lane=' matched every clean WARM line.
+// test/selftest.untimed.test.mjs gates the table (each marker vs every rendered message, + must-fail controls).
 const INJECTIONS = Object.freeze({   // ab-gate :142-151, the generic five
-    'bent-oracle': { want: 1, marker: 'STOP ORACLE', verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
-    'boxed': { want: 2, marker: 'VOID ALLOC', verdict: 'VERDICT NO VERDICT' },
-    'slow-dead': { want: 2, marker: 'VOID SLOW-DEAD', verdict: 'VERDICT NO VERDICT' },
-    'aa-drift': { want: 2, marker: 'VOID AA-DRIFT', verdict: 'VERDICT NO VERDICT' },
-    'live-drift': { want: 1, marker: 'STOP ANCHOR: live-drift ', verdict: 'VERDICT NO VERDICT (STOP ANCHOR)' },
+    // the bent B entry is caught at its first pre-clock site: the record check after the oracle pass, on a B copy
+    'bent-oracle': { want: 1, marker: /^STOP ORACLE: \S+ B#\d+ \(after the oracle pass\) op \d+ field \d+ got \S+ want \S+$/m, verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
+    'boxed': { want: 2, marker: /^VOID ALLOC lane=\S+: ALLOC B \S+ B\/op$/m, verdict: 'VERDICT NO VERDICT' },
+    'slow-dead': { want: 2, marker: /^VOID SLOW-DEAD lane=\S+: SLOW-DEAD \S+$/m, verdict: 'VERDICT NO VERDICT' },
+    'aa-drift': { want: 2, marker: /^VOID AA-DRIFT lane=\S+: AA-DRIFT \S+$/m, verdict: 'VERDICT NO VERDICT' },
+    // untimed (J2): live-drift / frozen-drift flip one byte in loadSources, pre-clock; the four ANCHOR STOPs are distinct
+    'live-drift': { want: 1, marker: /^STOP ANCHOR: live-drift \S+ differs from the frozen \S+ at char \d+ \(live \d+ vs frozen \d+ chars\)$/m, verdict: 'VERDICT NO VERDICT (STOP ANCHOR)' },
+    'frozen-drift': { want: 1, marker: /^STOP ANCHOR: frozen-sha \S+ sha256 [0-9a-f]{8} \(want [0-9a-f]{8}\)$/m, verdict: 'VERDICT NO VERDICT (STOP ANCHOR)' },
     // fix round R1 (law-11 review r1, blockers 4 / 5 / nits): the in-clock fold and the post-timing reference get a
     // must-fail control each; AB (Q-REPS a) and the discarded warm round 0 (Q-WARM a) get one each; checkArr gets one.
-    'late-bend': { want: 1, marker: 'fold (timed)', verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
-    'post-bend': { want: 1, marker: '(after timing, fresh reference)', verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
-    'ab-drift': { want: 2, marker: 'VOID REPS-DRIFT', verdict: 'VERDICT NO VERDICT' },
-    'warm-skew': { want: 2, marker: 'WARM lane=', absent: 'VOID AA-DRIFT', verdict: 'VERDICT NO VERDICT (run shape)', K: 1 },
-    'arr-bend': { want: 1, marker: ' (after warm) differs from the lane data', verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
+    'late-bend': { want: 1, marker: /^STOP ORACLE: \S+ B#\d+ fold \(timed\): got -?\d+ want -?\d+$/m, verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
+    'post-bend': { want: 1, marker: /^STOP ORACLE: \S+ B#\d+ \(after timing, fresh reference\) op \d+ field \d+ got \S+ want \S+$/m, verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
+    'ab-drift': { want: 2, marker: /^VOID REPS-DRIFT lane=\S+: REPS-DRIFT B\/AB \S+ reads [A-Z]+ but B\/A \S+ reads [A-Z]+ \(AB = A at B's reps \d+ vs A's \d+\)$/m, verdict: 'VERDICT NO VERDICT' },
+    // the WARM line whose AA/A is above the A/A band at the printed precision (never 0.xxxx, 1.00xx..1.04xx or 1.0500)
+    'warm-skew': { want: 2, marker: /^WARM lane=\S+ round 0 \(discarded, not in any median\) A\/A=\S+ B\/A=\S+ AA\/A=(?!0\.|1\.0[0-4]|1\.0500 )\d+\.\d{4} /m, absent: 'VOID AA-DRIFT', verdict: 'VERDICT NO VERDICT (run shape)', K: 1 },
+    'arr-bend': { want: 1, marker: /^STOP ORACLE: \S+ B#\d+ data\.\S+ \(after warm\) differs from the lane data at byte \d+$/m, verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
     // E2 (C-23): timedRounds deoptimized and pinned out of TF INSIDE the window (TF at its start, not at its end) -> the
     // window runs interpreted (WINDOW reads > 0 tool bytes) and the lane is VOID NOT-TF tool. Not in the selftest list.
-    'tool-deopt': { want: 2, marker: 'NOT-TF tool', verdict: 'VERDICT NO VERDICT' },
+    'tool-deopt': { want: 2, marker: /^VOID NOT-TF lane=\S+: NOT-TF tool timedRounds \(TF at window start (?:true|false), end (?:true|false)\)$/m, verdict: 'VERDICT NO VERDICT' },
 });
 // untimed spec injection (selftest only): the lane file's gated map replaced by {} -> STOP HARNESS in loadSpec
 const SPEC_INJECT = 'empty-gated';
@@ -371,14 +380,15 @@ async function loadSpec(ctx, file, inject) {
     const shape = [['ops', s.lanes.map((l) => l.ops).join(',')], ['minWindow', s.lanes.map((l) => l.minWindow).join(',')], ...extra.map((kv) => [kv[0], kv[1]])];
     ctx.spec = s;
     // C-4 / C-19: the judge checks the DECLARED K and C (default K_ROUNDS / C_COPIES); any other --K is a shape mismatch
-    ctx.jspec = judgeSpec({ laneIds: ids, gated: s.gated, K: s.K === undefined ? K_ROUNDS : s.K, C: s.C === undefined ? C_COPIES : s.C, shape, run: 'ALL', laneSha: ctx.laneSha });
+    try { ctx.jspec = judgeSpec({ laneIds: ids, gated: s.gated, K: s.K === undefined ? K_ROUNDS : s.K, C: s.C === undefined ? C_COPIES : s.C, shape, run: 'ALL', laneSha: ctx.laneSha }); } catch (e) { stop('HARNESS', 'spec: ' + e.message); }
 }
 const isGated = (ctx, id) => Object.hasOwn(ctx.spec.gated, id);
 const gateTag = (ctx, id) => (isGated(ctx, id) ? ' (gated)' : ' (reported)');
 
 /** S-3 / AB-G2 (ab-gate :243-263, whole-file form): each frozen file's sha256 must equal its pin, and a bound live file must
  *  be byte-identical to it (else STOP ANCHOR, four distinct texts: C-21). `live-drift` flips one byte of the FIRST bound
- *  live text in memory first. Paths (C-25): relative = against the gate file's directory; an absolute path is STOP HARNESS
+ *  live text in memory first; `frozen-drift` (J2) flips one byte of the FIRST frozen file's bytes as read, before its
+ *  sha256 (-> the frozen-sha STOP). Both are pre-clock: the run stops here, before any HEADER rung= line. Paths (C-25): relative = against the gate file's directory; an absolute path is STOP HARNESS
  *  when GITHUB_ACTIONS=true (C-17), checked for every path before any file is read. */
 function loadSources(ctx, inject) {
     const base = dirname(ctx.laneFile);
@@ -393,6 +403,10 @@ function loadSources(ctx, inject) {
     let first = true;
     for (const f of ctx.spec.frozen) {
         const buf = readOrStop(resolve(base, f.frozen), f.frozen, 'frozen');
+        if (inject === 'frozen-drift' && f === ctx.spec.frozen[0]) {
+            if (buf.length === 0) stop('HARNESS', 'frozen-drift: ' + f.frozen + ' is empty, no byte to flip');
+            buf[buf.length >>> 1] ^= 1;
+        }
         const sha = createHash('sha256').update(buf).digest('hex');
         if (sha !== f.sha256) stop('ANCHOR', 'frozen-sha ' + f.frozen + ' sha256 ' + sha.slice(0, 8) + ' (want ' + f.sha256.slice(0, 8) + ')');
         const ftext = buf.toString('utf8');
@@ -812,7 +826,7 @@ async function runLane(ctx, L, cols, K, inject) {
         ' B/A=' + fmtS(ratio, 3) + ' word=' + row.word + ' B-A=' + fmtS(delta, 2) + 'ns' +
         ' aa=' + fmtS(aa, 3) + ' slow=' + fmtS(slow, 3) + ' ab=' + (hasAB ? fmtS(ab, 3) : 'n/a') + ' B/AB=' + (hasAB ? fmtS(bab, 3) : 'n/a') + ' wordAB=' + wordAB +
         ' bop=' + Object.keys(bop).map((c) => c + ':' + fmt(bop[c], 4)).join(',') +
-        ' win=' + n + ' reps=A:' + reps + ',B:' + repsB + (hasAB ? ',AB:' + abReps : '') + ' spin=' + L.spin +
+        ' win=' + n + ' reps=A:' + reps + ',B:' + repsB + (hasAB ? ',AB:' + abReps : '') + ' spin=' + L.spin + ' warm=' + (KR - K) +
         (voids.length > 0 ? ' VOID=[' + voids.join('; ') + ']' : ''));
     const raw = (num) => ratioVec(rounds[num], rounds.A).map((v) => fmt(v, 4)).join(',');
     say(ctx, 'RAW lane=' + L.id + ' B/A=' + raw('B') + ' AA=' + raw('AA') + ' SLOW=' + raw('SLOW') + (hasAB ? ' AB=' + raw('AB') : ''));
@@ -821,21 +835,97 @@ async function runLane(ctx, L, cols, K, inject) {
     return row;
 }
 
-// ---------------------------------------------------------------- the judge (r0-verdict-parity.mjs makeSpec / wordG /
-// laneStateG / verdictOfG = ab-gate :893-1021 with lane ids, GATED and the HEADER shape as spec data; no flip switch).
-// Exported (C-26) as judgeSpec (= makeSpec, unchanged) and verdictOf(spec, lines) (= verdictOfG; pure, no module state).
+// ---------------------------------------------------------------- the judge (rung J1: r0-verdict-parity.mjs makeSpec /
+// wordG / laneStateG / verdictOfG = ab-gate :893-1021 with lane ids, GATED and the HEADER shape as spec data).
+// Exported (C-26) as judgeSpec (validated, frozen; C-13 / C-14 / C-4 / C-19 / C-27 / C-33) and verdictOf(spec, lines)
+// (pure: reads only its arguments and module constants). Two dialects (C-27):
+//   TOOL (dialect omitted): every check below, incl. the tool-only ones: the HEADER spec line (laneSha required, C-33),
+//     reps / AB / n-a (C-11), warm (RESULT warm=1, one WARM line per lane, RAW columns of exactly K values: C-12 / C-28)
+//     and the provenance grammar (HEADER arch, PROV start / end as provenance() prints them).
+//   'ab-gate@7e0f9262' (API only): ab-gate 7e0f9262's verdictOf byte for byte (C-9): it skips exactly those four.
+// The judge recomputes every word with its OWN wordG and its own band comparisons (never the producer's word / aaOk /
+// slowOk), so a producer bug in those cannot agree with itself (LEDGER law 4).
+const DIALECT_7E = 'ab-gate@7e0f9262';
+const JUDGE_KEYS = ['laneIds', 'gated', 'shape', 'K', 'C', 'run', 'laneSha', 'dialect'];
+const HEX64_RE = /^[0-9a-f]{64}$/;
+const SHAPE_KEY_RE = /^[A-Za-z][A-Za-z0-9]*$/;
+const ALLOC_TXT = '1/64';
+const BOP_COLS = Object.freeze(['A', 'B', 'AA', 'SLOW']);
+// provenance() (below) prints: PROV <tag> <ISO time> load <1m> <5m> <15m> busy-node [<ps rows>] quiet-lock <host>
+const PROV_RE = /^PROV (start|end) (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) load \d+\.\d{2} \d+\.\d{2} \d+\.\d{2} busy-node \[.*\] quiet-lock \S+$/;
+const WARM_HEAD = ' round 0 (discarded, not in any median) ';
+const WARM_COLS_RE = /^[A-Z]+\/A=\S+( [A-Z]+\/A=\S+)*$/;
+function judgeFail(msg) { throw new Error('judgeSpec: ' + msg); }
+const isPlain = (o) => o !== null && typeof o === 'object' && !Array.isArray(o) && (Object.getPrototypeOf(o) === Object.prototype || Object.getPrototypeOf(o) === null) && Object.getOwnPropertySymbols(o).length === 0;
+/** judgeSpec({ laneIds, gated, shape?, K?, C?, run?, laneSha, dialect? }) -> a frozen judging spec. Throws an Error naming
+ *  the first bad input: a non-plain object or an unknown key (did-you-mean; the A/A band, SLOW and ALLOC limits are module
+ *  constants AA_LO .. ALLOC_MAX, never keys), an unknown dialect, bad / duplicated lane ids, an empty gated map, a gated id
+ *  not in laneIds, a gated word not FASTER / SLOWER / WITHIN, K / C outside C-19, a shape that is not [string, string]
+ *  pairs, a bad run, and (TOOL dialect only, C-33) a laneSha that is not 64 lowercase hex. The legacy dialect ignores
+ *  laneSha (its spec stores null). */
 export function judgeSpec(o) {
-    const s = {
-        laneIds: o.laneIds, gated: o.gated, K: o.K ?? 11, C: o.C ?? 3, shape: o.shape ?? [], run: o.run ?? 'ALL',
-        aaLo: o.aaLo ?? 0.95, aaHi: o.aaHi ?? 1.05, slowMed: o.slowMed ?? 1.25, slowQ1: o.slowQ1 ?? 1.10,
-        allocMax: o.allocMax ?? 1 / 64, allocTxt: o.allocTxt ?? '1/64', bopCols: o.bopCols ?? ['A', 'B', 'AA', 'SLOW'],
-        laneSha: o.laneSha ?? null,
-    };
-    for (const id of Object.keys(s.gated)) if (!s.laneIds.includes(id)) throw new Error('gated lane ' + id + ' not in laneIds');
-    const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    s.headRe = new RegExp('^HEADER rung=(\\S+) (TIMED|ORACLE-ONLY \\(no clock\\)) node (\\S+)(?: arch (\\S+))? v8 (\\S+) cpu (.+) K=(\\S+) C=(\\S+)' +
-        s.shape.map(([k]) => ' ' + esc(k) + '=(\\S+)').join('') + ' inject=(\\S+)$');
-    return Object.freeze(s);
+    if (!isPlain(o)) judgeFail('the argument must be a plain object (own keys, no prototype or Symbol keys)');
+    for (const k of Object.keys(o)) if (!JUDGE_KEYS.includes(k)) judgeFail('unknown key ' + k + didYouMean(k, JUDGE_KEYS) + ' (allowed: ' + JUDGE_KEYS.join(', ') + ')');
+    // own keys only (r2: a key inherited through the prototype chain, e.g. a polluted Object.prototype.dialect, is never read)
+    const own = (k) => (Object.hasOwn(o, k) ? o[k] : undefined);
+    const dialect = own('dialect'), laneIds = own('laneIds'), gatedIn = own('gated'), Kin = own('K'), Cin = own('C'), shapeOwn = own('shape'), runIn = own('run'), shaIn = own('laneSha');
+    if (dialect !== undefined && dialect !== DIALECT_7E) judgeFail('unknown dialect ' + JSON.stringify(dialect) + ' (omit it for the tool dialect, or ' + JSON.stringify(DIALECT_7E) + ')');
+    if (!Array.isArray(laneIds) || laneIds.length === 0) judgeFail('laneIds must be a non-empty array of lane ids');
+    const ids = [];
+    for (const id of laneIds) {
+        if (typeof id !== 'string' || !LANE_ID_RE.test(id) || ids.includes(id)) judgeFail('lane id ' + JSON.stringify(id) + ' bad or duplicated');
+        ids.push(id);
+    }
+    if (!isPlain(gatedIn)) judgeFail('gated must be a plain object { laneId: word }');
+    const gk = Object.keys(gatedIn);
+    if (gk.length === 0) judgeFail('gated must name at least one lane (C-14)');
+    const gated = {};
+    for (const id of gk) {
+        if (!ids.includes(id)) judgeFail('gated lane ' + id + ' not in laneIds');
+        if (!WORDS.includes(gatedIn[id])) judgeFail('gated ' + id + ' word ' + String(gatedIn[id]) + ' (want ' + WORDS.join(', ') + ')');
+        gated[id] = gatedIn[id];
+    }
+    const K = Kin === undefined ? K_ROUNDS : Kin, C = Cin === undefined ? C_COPIES : Cin;
+    if (!isInt(K) || K < K_ROUNDS || K > K_MAX) judgeFail('K ' + String(Kin) + ' must be an integer in [' + K_ROUNDS + ', ' + K_MAX + '] (C-4: never lower than the tool K)');
+    if (!isInt(C) || C < C_COPIES || C > C_MAX) judgeFail('C ' + String(Cin) + ' must be an integer in [' + C_COPIES + ', ' + C_MAX + '] (C-4: never lower than the tool C)');
+    const shapeIn = shapeOwn === undefined ? [] : shapeOwn;
+    if (!Array.isArray(shapeIn)) judgeFail('shape must be an array of [key, value] string pairs');
+    const shape = [], keys = [];
+    for (const kv of shapeIn) {
+        if (!Array.isArray(kv) || kv.length !== 2 || typeof kv[0] !== 'string' || typeof kv[1] !== 'string' || !SHAPE_KEY_RE.test(kv[0]) || !/^\S+$/.test(kv[1]) || keys.includes(kv[0])) {
+            judgeFail('bad shape entry ' + JSON.stringify(kv) + ' (want [key, value]: key letters / digits, value a string with no whitespace, keys unique)');
+        }
+        keys.push(kv[0]);
+        shape.push(Object.freeze([kv[0], kv[1]]));
+    }
+    const run = runIn === undefined ? 'ALL' : runIn;
+    if (typeof run !== 'string' || !/^\S+$/.test(run)) judgeFail('run must be a string with no whitespace (default ALL)');
+    let laneSha = null;
+    if (dialect === undefined) {
+        if (typeof shaIn !== 'string' || !HEX64_RE.test(shaIn)) judgeFail('laneSha ' + (shaIn === undefined ? 'missing' : JSON.stringify(shaIn)) + ': the tool dialect requires the gate file sha256, 64 lowercase hex (C-33)');
+        laneSha = shaIn;
+    }
+    return Object.freeze({ laneIds: Object.freeze(ids), gated: Object.freeze(gated), shape: Object.freeze(shape), K, C, run, laneSha, dialect });
+}
+/** The belt (C-14 / C-33): a spec object built WITHOUT judgeSpec is checked for the fail-open states; -> reason | null. */
+const ownDialect = (sp) => (Object.hasOwn(sp, 'dialect') ? sp.dialect : undefined);   // r2: own keys only (never the prototype chain)
+const ownLaneSha = (sp) => (Object.hasOwn(sp, 'laneSha') ? sp.laneSha : undefined);
+function judgeBelt(sp) {
+    const dialect = ownDialect(sp), laneSha = ownLaneSha(sp);
+    if (dialect !== undefined && dialect !== DIALECT_7E) return 'unknown dialect ' + JSON.stringify(dialect);
+    if (!Array.isArray(sp.laneIds) || !Array.isArray(sp.shape)) return 'laneIds / shape not arrays';
+    if (sp.gated === null || typeof sp.gated !== 'object' || Object.keys(sp.gated).length === 0) return 'gated is empty (C-14: never a PASS)';
+    if (dialect === undefined && (typeof laneSha !== 'string' || !HEX64_RE.test(laneSha))) return 'laneSha is not 64 lowercase hex in the tool dialect (C-33)';
+    return null;
+}
+const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const headReOf = (shape) => new RegExp('^HEADER rung=(\\S+) (TIMED|ORACLE-ONLY \\(no clock\\)) node (\\S+)(?: arch (\\S+))? v8 (\\S+) cpu (.+) K=(\\S+) C=(\\S+)' +
+    shape.map(([k]) => ' ' + escRe(k) + '=(\\S+)').join('') + ' inject=(\\S+)$');
+/** TOOL dialect: which HEADER rung= fields an unparsed line lacks (the legacy text stays ab-gate's bare "unparsed"). */
+function headMissing(line, shape) {
+    const want = [' node ', ' v8 ', ' cpu ', ' K=', ' C=', ...shape.map(([k]) => ' ' + k + '='), ' inject='];
+    const miss = want.filter((t) => !line.includes(t)).map((t) => t.trim().replace(/=$/, ''));
+    return miss.length > 0 ? ' (no ' + miss.join(', ') + ' field)' : ' (fields out of order or malformed)';
 }
 const NUM_RE = /^-?\d+(\.\d+)?$/;
 const num = (t) => (typeof t === 'string' && NUM_RE.test(t) ? Number(t) : NaN);
@@ -851,13 +941,14 @@ function stat3(t) {
     const m = t === null ? null : /^([^[\]]*)\[([^[\]]*)\.\.([^[\]]*)\]$/.exec(t);
     return m === null ? { med: NaN, q1: NaN, q3: NaN } : { med: num(m[1]), q1: num(m[2]), q3: num(m[3]) };
 }
-function wordG(sp, s) {
+// C-5: the word band IS the A/A band (the judge's own copy of the rule; see above)
+function wordG(s) {
     if (!Number.isFinite(s.med)) return 'NONE';
-    if (s.med > sp.aaHi && s.q1 > 1) return 'SLOWER';
-    if (s.med < sp.aaLo && s.q3 < 1) return 'FASTER';
+    if (s.med > AA_HI && s.q1 > 1) return 'SLOWER';
+    if (s.med < AA_LO && s.q3 < 1) return 'FASTER';
     return 'WITHIN';
 }
-function laneStateG(sp, id, line, voidKinds) {
+function laneStateG(tool, id, line, voidKinds) {
     const why = [];
     const vt = line.indexOf(' VOID=[');
     if (vt >= 0) why.push('VOID(' + line.slice(vt + 7).split('; ').map((v) => v.split(/[\s\]]/)[0]).join(',') + ')');
@@ -867,30 +958,32 @@ function laneStateG(sp, id, line, voidKinds) {
     const aa = stat3(field(line, 'aa')), slow = stat3(field(line, 'slow'));
     if (!fin3(ratio)) why.push('B/A not finite');
     if (!fin3(aa)) why.push('aa ' + fmtS(aa, 3) + ' not finite');
-    else if (!(aa.med >= sp.aaLo && aa.med <= sp.aaHi)) why.push('aa ' + fmtS(aa, 3) + ' not in [' + sp.aaLo + ', ' + sp.aaHi + ']');
+    else if (!(aa.med >= AA_LO && aa.med <= AA_HI)) why.push('aa ' + fmtS(aa, 3) + ' not in [' + AA_LO + ', ' + AA_HI + ']');
     if (!fin3(slow)) why.push('slow ' + fmtS(slow, 3) + ' not finite');
-    else if (!(slow.med > sp.slowMed && slow.q1 > sp.slowQ1)) why.push('slow ' + fmtS(slow, 3) + ' not med > ' + sp.slowMed.toFixed(2) + ' and q1 > ' + sp.slowQ1.toFixed(2));
-    // Q-REPS-2 ("judge both ratios"): reps A != B needs a finite B/AB (B against A at B's reps) whose word, recomputed here
-    // from its numbers by the same wordG, equals the printed wordAB and the B/A word (else REPS-DRIFT), plus an AB B/op
-    // entry. ab (AB / A) is REPORTED only (no band). Equal reps print ab, B/AB and wordAB as n/a. An unparsed reps field
-    // is not clean (fail closed).
-    const w = wordG(sp, ratio);
-    const repsTxt = field(line, 'reps'), babTxt = field(line, 'B/AB'), pAB = field(line, 'wordAB');
-    const rm = repsTxt === null ? null : /^A:(\d+),B:(\d+)(?:,AB:(\d+))?$/.exec(repsTxt);
-    let cols = sp.bopCols;
-    if (rm === null) why.push('reps ' + repsTxt + ' unparsed (want A:<n>,B:<n>[,AB:<n>])');
-    else if (Number(rm[1]) !== Number(rm[2])) {
-        cols = [...sp.bopCols, 'AB'];
-        if (rm[3] === undefined || Number(rm[3]) !== Number(rm[2])) why.push('AB reps ' + rm[3] + ' (want B:' + rm[2] + ')');
-        const bab = stat3(babTxt);
-        if (!fin3(bab)) why.push('B/AB ' + babTxt + ' not finite with reps A:' + rm[1] + ' != B:' + rm[2]);
-        else {
-            const wab = wordG(sp, bab);
-            if (pAB !== wab) why.push('printed wordAB=' + pAB + ' but B/AB ' + fmtS(bab, 3) + ' reads ' + wab);
-            else if (wab !== w) why.push('REPS-DRIFT B/AB ' + fmtS(bab, 3) + ' reads ' + wab + ' but B/A ' + fmtS(ratio, 3) + ' reads ' + w);
-        }
-    } else if (rm[3] !== undefined) why.push('AB reps ' + rm[3] + ' with equal reps (want no AB)');
-    if (rm !== null && Number(rm[1]) === Number(rm[2])) for (const k of ['ab', 'B/AB', 'wordAB']) if (field(line, k) !== 'n/a') why.push(k + '=' + field(line, k) + ' with equal reps (want n/a)');
+    else if (!(slow.med > SLOW_MED && slow.q1 > SLOW_Q1)) why.push('slow ' + fmtS(slow, 3) + ' not med > ' + SLOW_MED.toFixed(2) + ' and q1 > ' + SLOW_Q1.toFixed(2));
+    const w = wordG(ratio);
+    let cols = BOP_COLS;
+    if (tool) {
+        // TOOL only (C-11, Q-REPS-2 "judge both ratios"): reps A != B needs a finite B/AB (B against A at B's reps) whose
+        // word, recomputed here by the same wordG, equals the printed wordAB and the B/A word (else REPS-DRIFT), plus an
+        // AB B/op entry. ab (AB / A) is REPORTED only (no band). Equal reps print ab, B/AB and wordAB as n/a. An unparsed
+        // reps field is not clean (fail closed).
+        const repsTxt = field(line, 'reps'), babTxt = field(line, 'B/AB'), pAB = field(line, 'wordAB');
+        const rm = repsTxt === null ? null : /^A:(\d+),B:(\d+)(?:,AB:(\d+))?$/.exec(repsTxt);
+        if (rm === null) why.push('reps ' + repsTxt + ' unparsed (want A:<n>,B:<n>[,AB:<n>])');
+        else if (Number(rm[1]) !== Number(rm[2])) {
+            cols = [...BOP_COLS, 'AB'];
+            if (rm[3] === undefined || Number(rm[3]) !== Number(rm[2])) why.push('AB reps ' + rm[3] + ' (want B:' + rm[2] + ')');
+            const bab = stat3(babTxt);
+            if (!fin3(bab)) why.push('B/AB ' + babTxt + ' not finite with reps A:' + rm[1] + ' != B:' + rm[2]);
+            else {
+                const wab = wordG(bab);
+                if (pAB !== wab) why.push('printed wordAB=' + pAB + ' but B/AB ' + fmtS(bab, 3) + ' reads ' + wab);
+                else if (wab !== w) why.push('REPS-DRIFT B/AB ' + fmtS(bab, 3) + ' reads ' + wab + ' but B/A ' + fmtS(ratio, 3) + ' reads ' + w);
+            }
+        } else if (rm[3] !== undefined) why.push('AB reps ' + rm[3] + ' with equal reps (want no AB)');
+        if (rm !== null && Number(rm[1]) === Number(rm[2])) for (const k of ['ab', 'B/AB', 'wordAB']) if (field(line, k) !== 'n/a') why.push(k + '=' + field(line, k) + ' with equal reps (want n/a)');
+    }
     const bopTxt = field(line, 'bop');
     const bops = bopTxt === null ? [] : bopTxt.split(',');
     const seen = new Set(), neg = [];
@@ -898,25 +991,75 @@ function laneStateG(sp, id, line, voidKinds) {
     for (const b of bops) {
         const kv = b.split(':');
         const v = kv.length === 2 ? num(kv[1]) : NaN;
-        if (kv.length !== 2 || !cols.includes(kv[0]) || seen.has(kv[0]) || !(v < sp.allocMax)) bopOk = false;
+        if (kv.length !== 2 || !cols.includes(kv[0]) || seen.has(kv[0]) || !(v < ALLOC_MAX)) bopOk = false;
         else if (!(v >= 0)) neg.push(b);
         seen.add(kv[0]);
     }
-    if (!bopOk) why.push('bop ' + bopTxt + ' not ' + cols.join(', ') + ' each < ' + sp.allocTxt);
+    if (!bopOk) why.push('bop ' + bopTxt + ' not ' + cols.join(', ') + ' each < ' + ALLOC_TXT);
     if (neg.length > 0) why.push('bop ' + neg.join(',') + ' negative (want >= 0)');
     if (printed !== w) why.push('printed word=' + printed + ' but B/A ' + fmtS(ratio, 3) + ' reads ' + w);
     return { id, word: printed, ratio, clean: why.length === 0, why };
 }
+/** TOOL only (C-12 / C-28): RESULT warm=1, exactly one WARM line and one RAW line per lane, every RAW column (B/A, AA,
+ *  SLOW, and AB when printed) holding exactly K values. Appends run-shape reasons to `shape`. */
+function warmShape(sp, lines, res, shape) {
+    const ids = sp.laneIds;
+    const warmBad = [];
+    for (const id of ids) {
+        if (!res.has(id) || res.get(id).length !== 1) continue;
+        const wv = field(res.get(id)[0], 'warm');
+        if (wv !== '1') warmBad.push(id + (wv === null ? ' (no warm field)' : ' (warm=' + wv + ')'));
+    }
+    if (warmBad.length > 0) shape.push('RESULT warm=1 missing for ' + warmBad.length + ' lane(s) ' + warmBad.join(','));
+    const warm = new Map(), raw = new Map(), unknown = [];
+    for (const l of lines) {
+        const m = /^(WARM|RAW) lane=(\S+) /.exec(l);
+        if (m === null) continue;
+        if (!ids.includes(m[2])) { unknown.push(m[1] + ' ' + m[2]); continue; }
+        const by = m[1] === 'WARM' ? warm : raw;
+        if (by.has(m[2])) by.get(m[2]).push(l); else by.set(m[2], [l]);
+    }
+    if (unknown.length > 0) shape.push('WARM / RAW for unknown lane(s) ' + unknown.join(','));
+    const wantOne = (by, what) => {
+        const off = ids.filter((id) => !by.has(id) || by.get(id).length !== 1);
+        if (off.length > 0) shape.push(what + ' lines per lane not 1 for ' + off.map((id) => id + ':' + (by.has(id) ? by.get(id).length : 0)).join(','));
+    };
+    wantOne(warm, 'WARM');
+    wantOne(raw, 'RAW');
+    for (const id of ids) {
+        if (warm.has(id) && warm.get(id).length === 1) {
+            const l = warm.get(id)[0], head = 'WARM lane=' + id + WARM_HEAD;
+            if (!l.startsWith(head) || !WARM_COLS_RE.test(l.slice(head.length))) shape.push('WARM lane=' + id + ' line unparsed');
+        }
+        if (raw.has(id) && raw.get(id).length === 1) {
+            const l = raw.get(id)[0];
+            for (const c of ['B/A', 'AA', 'SLOW', 'AB']) {
+                const t = field(l, c);
+                if (t === null) { if (c !== 'AB') shape.push('RAW lane=' + id + ' ' + c + ' column missing'); continue; }
+                const vs = t.split(',');
+                if (vs.length !== sp.K || vs.some((v) => v === '')) shape.push('RAW lane=' + id + ' ' + c + ' holds ' + vs.length + ' values (want K=' + sp.K + ')');
+            }
+        }
+    }
+}
 const laneTxt = (s) => s.id + ' ' + s.word + ' ' + fmtS(s.ratio, 3);
+/** verdictOf(spec, lines) -> { code: 0 PASS | 2 NO VERDICT | 3 FINDING, reported, text } (pure). spec: a judgeSpec
+ *  result; a spec object that is not (empty gated, a tool-dialect laneSha that is not 64 hex, an unknown dialect) reads
+ *  code 2 (the belt, C-14 / C-33). A non-object spec or a non-array lines throws a TypeError. */
 export function verdictOf(sp, lines) {
+    if (sp === null || typeof sp !== 'object') throw new TypeError('verdictOf: spec must be a judgeSpec() result');
+    if (!Array.isArray(lines)) throw new TypeError('verdictOf: lines must be an array of strings');
+    const belt = judgeBelt(sp);
+    if (belt !== null) return { code: 2, reported: 'REPORTED (never read by the verdict) none: the judging spec was refused', text: 'VERDICT NO VERDICT (judge spec) ' + belt };
+    const tool = ownDialect(sp) === undefined, laneSha = ownLaneSha(sp);
     const ids = sp.laneIds;
     const shape = [];
     let cpu = '?', arch = 'not printed', nodeV = '?';
     const heads = lines.filter((l) => l.startsWith('HEADER rung='));
     if (heads.length !== 1) shape.push(heads.length + ' HEADER rung= lines (want 1)');
     else {
-        const m = sp.headRe.exec(heads[0]);
-        if (m === null) shape.push('HEADER rung= line unparsed');
+        const m = headReOf(sp.shape).exec(heads[0]);
+        if (m === null) shape.push('HEADER rung= line unparsed' + (tool ? headMissing(heads[0], sp.shape) : ''));
         else {
             nodeV = m[3]; if (m[4] !== undefined) arch = m[4]; cpu = m[6];
             if (m[1] !== sp.run) shape.push('rung=' + m[1] + ' (want ' + sp.run + ')');
@@ -926,24 +1069,31 @@ export function verdictOf(sp, lines) {
             sp.shape.forEach(([k, want], i) => { if (m[9 + i] !== want) shape.push(k + '=' + m[9 + i] + ' (want ' + want + ')'); });
             const inj = m[9 + sp.shape.length];
             if (inj !== 'null') shape.push('inject=' + inj + ' (want null)');
+            if (tool && m[4] === undefined) shape.push('HEADER arch missing (the tool prints arch <process.arch>)');
         }
     }
-    // R1 fix (nit): the HEADER spec line names the lane file by its sha256 (= the judging spec's, when it has one) and
-    // whether spec.transform edited each frozen text; absent or malformed = run shape.
-    const specs = lines.filter((l) => l.startsWith('HEADER spec '));
-    if (specs.length !== 1) shape.push(specs.length + ' HEADER spec lines (want 1)');
-    else {
-        const lsha = field(specs[0], 'lane-sha256'), tr = field(specs[0], 'transform');
-        if (lsha === null || !/^[0-9a-f]{64}$/.test(lsha)) shape.push('HEADER spec lane-sha256 missing');
-        else if (sp.laneSha !== null && lsha !== sp.laneSha) shape.push('lane-sha256=' + lsha.slice(0, 8) + ' (want ' + sp.laneSha.slice(0, 8) + ')');
-        if (tr === null || !TR_RE.test(tr)) shape.push('HEADER spec transform missing');
+    if (tool) {
+        // R1 fix (nit) + C-33: the HEADER spec line names the lane file by its sha256 (= the judging spec's laneSha) and
+        // whether spec.transform edited each frozen text; absent or malformed = run shape.
+        const specs = lines.filter((l) => l.startsWith('HEADER spec '));
+        if (specs.length !== 1) shape.push(specs.length + ' HEADER spec lines (want 1)');
+        else {
+            const lsha = field(specs[0], 'lane-sha256'), tr = field(specs[0], 'transform');
+            if (lsha === null || !HEX64_RE.test(lsha)) shape.push('HEADER spec lane-sha256 missing');
+            else if (lsha !== laneSha) shape.push('lane-sha256=' + lsha.slice(0, 8) + ' (want ' + laneSha.slice(0, 8) + ')');
+            if (tr === null || !TR_RE.test(tr)) shape.push('HEADER spec transform missing');
+        }
     }
     const stops = lines.filter((l) => l.startsWith('STOP ') || l.startsWith('CRASH '));
     for (const l of stops) shape.push(l.startsWith('CRASH ') ? 'CRASH' : 'STOP ' + l.slice(5).split(':')[0]);
-    const provStart = lines.filter((l) => l.startsWith('PROV start ')).length;
-    if (provStart !== 1) shape.push(provStart + ' PROV start lines (want 1)');
-    const provEnd = lines.filter((l) => l.startsWith('PROV end ')).length;
-    if (provEnd !== 1) shape.push(provEnd + ' PROV end lines (want 1)');
+    for (const tag of ['start', 'end']) {
+        const pl = lines.filter((l) => l.startsWith('PROV ' + tag + ' '));
+        if (pl.length !== 1) shape.push(pl.length + ' PROV ' + tag + ' lines (want 1)');
+        else if (tool) {
+            const pm = PROV_RE.exec(pl[0]);
+            if (pm === null || pm[1] !== tag || Number.isNaN(Date.parse(pm[2])) || new Date(pm[2]).toISOString() !== pm[2]) shape.push('PROV ' + tag + ' line unparsed (want PROV ' + tag + ' <ISO time> load <3 values> busy-node [..] quiet-lock <host>)');
+        }
+    }
     const res = new Map(), unknown = [], voidKinds = new Map();
     for (const l of lines) {
         const r = /^RESULT lane=(\S+) /.exec(l);
@@ -959,8 +1109,9 @@ export function verdictOf(sp, lines) {
     const missing = ids.filter((id) => !res.has(id)), dup = ids.filter((id) => res.has(id) && res.get(id).length !== 1);
     if (missing.length > 0) shape.push('no RESULT for ' + missing.length + ' lane(s) ' + missing.join(','));
     if (dup.length > 0) shape.push('several RESULT lines for ' + dup.join(','));
+    if (tool) warmShape(sp, lines, res, shape);
     const st = new Map();
-    for (const id of ids) if (res.has(id) && res.get(id).length === 1) st.set(id, laneStateG(sp, id, res.get(id)[0], voidKinds));
+    for (const id of ids) if (res.has(id) && res.get(id).length === 1) st.set(id, laneStateG(tool, id, res.get(id)[0], voidKinds));
     const gatedIds = Object.keys(sp.gated);
     const isG = (id) => Object.hasOwn(sp.gated, id);
     const wrong = gatedIds.filter((id) => st.has(id) && st.get(id).clean && st.get(id).word !== sp.gated[id]);
@@ -998,28 +1149,30 @@ function provenance(ctx, tag) {
 }
 function parseCli(argv) {
     // K: null = not given (the gate's declared K is used, resolved after the spec loads)
-    const o = { laneFile: null, run: null, K: null, kGiven: false, selftest: false, oracleOnly: false, verdictFile: null };
+    const o = { laneFile: null, run: null, K: null, kGiven: false, selftest: false, selftestUntimed: false, oracleOnly: false, verdictFile: null };
     if (argv.length === 0 || argv[0].startsWith('--')) stop('CLI', 'usage: ABGate.js <lane-file.mjs> --run ALL|<ids> [--K k] | --oracle-only | --selftest | --verdict-file <log|->');
     o.laneFile = argv[0];
     for (let i = 1; i < argv.length; i++) {
         const a = argv[i];
         if (a === '--selftest') { o.selftest = true; continue; }
+        if (a === '--selftest-untimed') { o.selftestUntimed = true; continue; }   // J2: the untimed selftest rows only (no clock)
         if (a === '--oracle-only') { o.oracleOnly = true; continue; }
         const v = argv[++i];
         if (v === undefined) stop('CLI', a + ' needs a value');
         if (a === '--run') o.run = v;
         else if (a === '--K') { o.K = Number(v); o.kGiven = true; }
         else if (a === '--verdict-file') o.verdictFile = v;
-        else stop('CLI', 'unknown flag ' + a + didYouMean(a, ['--run', '--K', '--oracle-only', '--selftest', '--verdict-file']));
+        else stop('CLI', 'unknown flag ' + a + didYouMean(a, ['--run', '--K', '--oracle-only', '--selftest', '--selftest-untimed', '--verdict-file']));
     }
     return finishOpts(o);
 }
 /** The cross-flag checks shared by the CLI and runGate (ab-proto parseCli :867-871, verbatim). */
 function finishOpts(o) {
-    if (o.verdictFile !== null && (o.selftest || o.oracleOnly || o.run !== null || o.kGiven)) stop('CLI', '--verdict-file takes no other flag');
+    if (o.verdictFile !== null && (o.selftest || o.selftestUntimed === true || o.oracleOnly || o.run !== null || o.kGiven)) stop('CLI', '--verdict-file takes no other flag');
     if (o.selftest && (o.oracleOnly || o.run !== null || o.kGiven)) stop('CLI', '--selftest takes no other flag');
+    if (o.selftestUntimed === true && (o.selftest || o.oracleOnly || o.run !== null || o.kGiven)) stop('CLI', '--selftest-untimed takes no other flag');
     if (o.oracleOnly && o.run === null) o.run = 'ALL';
-    if (!o.selftest && o.verdictFile === null && o.run === null) stop('CLI', 'give --run ALL|<ids> [--K k], --oracle-only, --selftest or --verdict-file <log|->');
+    if (!o.selftest && o.selftestUntimed !== true && o.verdictFile === null && o.run === null) stop('CLI', 'give --run ALL|<ids> [--K k], --oracle-only, --selftest or --verdict-file <log|->');
     if (o.kGiven && (!Number.isInteger(o.K) || !(o.K >= 1 && o.K <= K_MAX))) stop('CLI', '--K 1..51');
     return o;
 }
@@ -1063,91 +1216,143 @@ function envWith(inject) {
     if (inject !== null) env[INJECT_ENV] = inject;
     return env;
 }
-/** Untimed judge rows over THIS spec's lane ids, HEADER shape and GATED literal: [name, log text, exit, VERDICT prefix,
- *  substring the VERDICT line must contain (or null)]. Each row is a string edit of the clean synthetic log; the R1 fix
- *  rows (a)-(j), the Q-REPS rows and R0's boundary rows B1-B11 each sit on the check they name (law-11 review r1). */
-function judgeRows(ctx) {
-    const ids = ctx.jspec.laneIds, gatedIds = Object.keys(ctx.spec.gated);
-    if (gatedIds.length === 0) return [];
+/** J2: the clean synthetic TOOL-dialect log over the judging spec `sp` (one HEADER rung= and one HEADER spec line, PROV
+ *  start / end in provenance()'s grammar, per lane a RESULT with warm=1, one RAW of K values and one WARM line), as a
+ *  function of per-lane patches: lines(patch) -> string[] (patch[id] overrides that lane's RESULT / RAW / WARM fields). */
+function synthLog(sp, name, frozenNames) {
+    const ids = sp.laneIds;
     const RAT = { FASTER: '0.500[0.490..0.510]', SLOWER: '1.500[1.490..1.510]', WITHIN: '1.000[0.990..1.010]' };
-    const BOP4 = 'A:0.0000,B:0.0000,AA:0.0000,SLOW:0.0000', BOP5 = BOP4 + ',AB:0.0000';
-    const head = 'HEADER rung=ALL TIMED node v0.0.0 arch synthetic v8 0.0 cpu Synthetic CPU K=' + ctx.jspec.K + ' C=' + ctx.jspec.C +
-        ctx.jspec.shape.map(([k, v]) => ' ' + k + '=' + v).join('') + ' inject=null';
-    const specLine = 'HEADER spec ' + ctx.spec.name + ' lane-file synthetic lane-sha256=' + ctx.jspec.laneSha + ' transform=' + ctx.spec.frozen.map((f) => f.name + ':edited').join(',') + ' | tool synthetic';
-    const want = (id) => (isGated(ctx, id) ? ctx.spec.gated[id] : 'WITHIN');
-    const res = (id, o) => 'RESULT lane=' + id + gateTag(ctx, id) + ' A=1.00[1.00..1.00] B=1.00[1.00..1.00] ns/op B/A=' + (o.ba ?? RAT[o.w]) + ' word=' + (o.word ?? o.w) +
+    const BOP4 = 'A:0.0000,B:0.0000,AA:0.0000,SLOW:0.0000';
+    const isG = (id) => Object.hasOwn(sp.gated, id);
+    const want = (id) => (isG(id) ? sp.gated[id] : 'WITHIN');
+    const head = 'HEADER rung=ALL TIMED node v0.0.0 arch synthetic v8 0.0 cpu Synthetic CPU K=' + sp.K + ' C=' + sp.C +
+        sp.shape.map(([k, v]) => ' ' + k + '=' + v).join('') + ' inject=null';
+    const specLine = 'HEADER spec ' + name + ' lane-file synthetic lane-sha256=' + sp.laneSha + ' transform=' + frozenNames.map((n) => n + ':edited').join(',') + ' | tool synthetic';
+    const prov = (tag) => 'PROV ' + tag + ' 2026-01-01T00:00:00.000Z load 0.00 0.00 0.00 busy-node [] quiet-lock synthetic';
+    const provS = prov('start'), provE = prov('end');
+    const res = (id, o) => 'RESULT lane=' + id + (isG(id) ? ' (gated)' : ' (reported)') + ' A=1.00[1.00..1.00] B=1.00[1.00..1.00] ns/op B/A=' + (o.ba ?? RAT[o.w]) + ' word=' + (o.word ?? o.w) +
         ' B-A=0.00[0.00..0.00]ns aa=' + (o.aa ?? '1.000[0.990..1.010]') + ' slow=' + (o.slow ?? '2.000[1.900..2.100]') + ' ab=' + (o.ab ?? 'n/a') + ' B/AB=' + (o.bab ?? 'n/a') + ' wordAB=' + (o.wab ?? 'n/a') +
-        ' bop=' + (o.bop ?? BOP4) + ' win=1 reps=' + (o.reps ?? 'A:1,B:1') + (o.tail ?? '');
-    // lines(patch) -> the synthetic log as an array (patch[id] overrides that lane's RESULT fields); txt() joins it
-    const lines = (patch = {}) => [head, specLine, 'PROV start synthetic', ...ids.map((id) => res(id, { w: want(id), ...(patch[id] || {}) })), 'PROV end synthetic'];
-    const txt = (ls) => ls.join('\n') + '\n';
-    const log = (over, aaBad) => { const p = {}; for (const id of ids) p[id] = { ...(over[id] ? { w: over[id] } : {}), ...(id === aaBad ? { aa: '1.080[1.070..1.090]' } : {}) }; return txt(lines(p)); };
+        ' bop=' + (o.bop ?? BOP4) + ' win=1 reps=' + (o.reps ?? 'A:1,B:1') + ' spin=1' + (o.warm ?? ' warm=1') + (o.tail ?? '');
+    const rawOf = (n) => new Array(n).fill('1.0000').join(',');
+    const laneLines = (id, o) => {
+        const r = rawOf(o.rawN ?? sp.K);
+        return [res(id, o), 'RAW lane=' + id + ' B/A=' + r + ' AA=' + r + ' SLOW=' + r,
+            'WARM lane=' + id + ' round 0 (discarded, not in any median) A/A=1.0000 B/A=1.0000 AA/A=1.0000 SLOW/A=2.0000'];
+    };
+    const lines = (patch = {}) => [head, specLine, provS, ...ids.flatMap((id) => laneLines(id, { w: want(id), ...(patch[id] || {}) })), provE];
+    return { RAT, BOP4, want, head, specLine, provS, provE, res, lines };
+}
+/** J2 (TASK 3): the TOOL-OWNED judging spec of the untimed judge rows: x:f gated FASTER, x:s gated SLOWER, x:w gated
+ *  WITHIN, x:r REPORTED, built by judgeSpec in the tool dialect (laneSha required, C-33). K / C are the consumer's
+ *  declared K / C, so the rows check the K / C its gate is judged with (M31). */
+function selftestSpec(ctx) {
+    return judgeSpec({ laneIds: ['x:f', 'x:s', 'x:w', 'x:r'], gated: { 'x:f': 'FASTER', 'x:s': 'SLOWER', 'x:w': 'WITHIN' },
+        shape: [['ops', '64,64,64,64'], ['minWindow', '8,8,8,8']], K: ctx.jspec.K, C: ctx.jspec.C, run: 'ALL',
+        laneSha: createHash('sha256').update('lite-ab-gate selftest judge spec').digest('hex') });
+}
+/** Untimed judge rows (plan-GB A2: 59) on the tool-owned spec, judged in-process by verdictOf: [name, lines, code,
+ *  VERDICT prefix, substring the VERDICT line must contain (or null)]. Each row is an edit of the clean synthetic log;
+ *  the R1 fix rows (a)-(j), the run-shape rows, the C-11 / C-12 / PROV rows and R0's boundary rows B1-B11 each sit on
+ *  the check they name. The empty-gated belt row is run by selftest() (it needs a spec judgeSpec refuses). */
+function judgeRows(sp) {
+    const S = synthLog(sp, 'selftest', ['k.js']);
+    const { RAT, BOP4, want, head, specLine, provS, provE, res, lines } = S;
+    const gatedIds = Object.keys(sp.gated), K = sp.K, C = sp.C;
+    const BOP5 = BOP4 + ',AB:0.0000';
     const g0 = gatedIds[0], gN = gatedIds[gatedIds.length - 1];
-    const flip = ctx.spec.gated[g0] === 'SLOWER' ? 'WITHIN' : 'SLOWER';
-    const NV = 'VERDICT NO VERDICT', NVS = 'VERDICT NO VERDICT (run shape)', NVG = 'VERDICT NO VERDICT (gated lane not clean)';
+    const flip = sp.gated[g0] === 'SLOWER' ? 'WITHIN' : 'SLOWER';
+    const NVS = 'VERDICT NO VERDICT (run shape)', NVG = 'VERDICT NO VERDICT (gated lane not clean)';
     const voidLine = (ls) => { const c = ls.slice(); c.splice(c.length - 1, 0, 'VOID NOT-TF lane=' + gN + ': NOT-TF A#1'); return c; };
     const edit = (ls, from, to) => ls.map((l) => (l === head ? l.replace(from, to) : l));
-    const wN = want(gN), wordExit = wN === 'WITHIN' ? 0 : 3, wordPre = wN === 'WITHIN' ? 'VERDICT PASS' : 'VERDICT FINDING';
+    const swap = (ls, line, from, to) => ls.map((l) => (l === line ? l.replace(from, to) : l));
+    const wN = want(gN);
+    const wordExit = wN === 'WITHIN' ? 0 : 3, wordPre = wN === 'WITHIN' ? 'VERDICT PASS' : 'VERDICT FINDING';
     const other = wN === 'WITHIN' ? 'SLOWER' : 'WITHIN';
     const P = (o) => ({ [gN]: o });
+    const dupRes = (ls) => { const c = ls.slice(); c.splice(c.length - 1, 0, res(gN, { w: wN })); return c; };
     const AB_OK = { reps: 'A:4,B:1,AB:1', ab: '1.818[1.806..1.850]', bab: RAT[wN], wab: wN, bop: BOP5 };
     const wAlt = wN === 'FASTER' ? 'SLOWER' : 'FASTER';
-    const rows = [
-        ['judge PASS (every gated lane its GATED word)', log({}, null), 0, 'VERDICT PASS gated=' + gatedIds.length + '/' + gatedIds.length, null],
-        ['judge FINDING (' + g0 + ' clean ' + flip + ')', log({ [g0]: flip }, null), 3, 'VERDICT FINDING wrong-gated=[' + g0 + ' ' + flip, null],
-        ['judge NO VERDICT (' + gN + ' A/A 1.080)', log({}, gN), 2, NVG + ' not-clean=[' + gN + ' aa 1.080', null],
-        // (a)-(h): one gated lane not clean, each through the check it names
-        ['judge (a) VOID NOT-TF line on ' + gN, txt(voidLine(lines())), 2, NVG, gN + ' VOID-line(NOT-TF)'],
-        ['judge (b) VOID=[GC-WINDOW] tag on ' + gN, txt(lines(P({ tail: ' VOID=[GC-WINDOW major 1]' }))), 2, NVG, gN + ' VOID(GC-WINDOW)'],
-        ['judge (c) PROV end dropped', txt(lines().slice(0, -1)), 2, NVS, '0 PROV end lines (want 1)'],
-        ['judge (d) ' + gN + ' slow 1.200[1.150..1.250]', txt(lines(P({ slow: '1.200[1.150..1.250]' }))), 2, NVG, gN + ' slow 1.200[1.150..1.250] not med'],
-        ['judge (e) ' + gN + ' bop B:0.0200', txt(lines(P({ bop: 'A:0.0000,B:0.0200,AA:0.0000,SLOW:0.0000' }))), 2, NVG, gN + ' bop A:0.0000,B:0.0200'],
-        ['judge (f) ' + gN + ' slow q1 1.050', txt(lines(P({ slow: '2.000[1.050..2.100]' }))), 2, NVG, gN + ' slow 2.000[1.050..2.100] not med'],
-        ['judge (g) ' + gN + ' B/A q3 NaN', txt(lines(P({ ba: RAT[wN].replace(/\.\.[^\]]*\]$/, '..NaN]') }))), 2, NVG, gN + ' B/A not finite'],
-        ['judge (h) ' + gN + ' printed word ' + other + ', numbers kept', txt(lines(P({ word: other }))), 2, NVG, gN + ' printed word=' + other],
-        // (i) run shape, each naming itself
-        ['judge (i) K=7', txt(edit(lines(), ' K=' + ctx.jspec.K + ' ', ' K=7 ')), 2, NVS, 'K=7 (want ' + ctx.jspec.K + ')'],
-        ['judge (i) C=2', txt(edit(lines(), ' C=' + ctx.jspec.C + ' ', ' C=2 ')), 2, NVS, 'C=2 (want ' + ctx.jspec.C + ')'],
-        ['judge (i) inject=aa-drift', txt(edit(lines(), ' inject=null', ' inject=aa-drift')), 2, NVS, 'inject=aa-drift (want null)'],
-        ['judge (i) rung=x', txt(edit(lines(), 'HEADER rung=ALL ', 'HEADER rung=x ')), 2, NVS, 'rung=x (want ALL)'],
-        ['judge (i) HEADER twice', txt([head, ...lines()]), 2, NVS, '2 HEADER rung= lines (want 1)'],
-        ['judge (i) ' + gN + ' RESULT twice', txt((() => { const c = lines(); c.splice(c.length - 1, 0, res(gN, { w: wN })); return c; })()), 2, NVS, 'several RESULT lines for ' + gN],
-        ['judge (i) STOP appended', txt([...lines(), 'STOP ORACLE: synthetic']), 2, 'VERDICT NO VERDICT (STOP ORACLE)', 'STOP ORACLE'],
-        ['judge (i) CRASH appended', txt([...lines(), 'CRASH Error: synthetic']), 2, 'VERDICT NO VERDICT (CRASH)', 'CRASH'],
-        ['judge (i) HEADER spec line dropped', txt(lines().filter((l) => l !== specLine)), 2, NVS, '0 HEADER spec lines (want 1)'],
-        ['judge (i) HEADER spec lane-sha256 of another lane file', txt(lines().map((l) => (l === specLine ? l.replace(ctx.jspec.laneSha, '0'.repeat(64)) : l))), 2, NVS, 'lane-sha256=00000000 (want ' + ctx.jspec.laneSha.slice(0, 8) + ')'],
-        ['judge (i) HEADER spec transform= dropped', txt(lines().map((l) => (l === specLine ? l.replace(/ transform=\S+/, '') : l))), 2, NVS, 'HEADER spec transform missing'],
-        // Q-REPS-2 rows (i)-(v) + AB bop + equal reps
-        ['judge Q-REPS (i) ' + gN + ' ab 1.818 (REPORTED) + B/AB agreeing', txt(lines(P(AB_OK))), 0, 'VERDICT PASS', null],
-        ['judge Q-REPS (ii) ' + gN + ' B/AB reads ' + wAlt + ' vs B/A ' + wN, txt(lines(P({ ...AB_OK, bab: RAT[wAlt], wab: wAlt }))), 2, NVG, gN + ' REPS-DRIFT B/AB ' + RAT[wAlt] + ' reads ' + wAlt],
-        ['judge Q-REPS (iii) ' + gN + ' reps differ, B/AB missing', txt(lines(P({ ...AB_OK, bab: 'n/a', wab: 'n/a' }))), 2, NVG, gN + ' B/AB n/a not finite with reps A:4 != B:1'],
-        ['judge Q-REPS (iv) ' + gN + ' printed wordAB=' + wN + ' but B/AB numbers read ' + wAlt, txt(lines(P({ ...AB_OK, bab: RAT[wAlt], wab: wN }))), 2, NVG, gN + ' printed wordAB=' + wN + ' but B/AB'],
-        ['judge Q-REPS (v) ' + gN + ' B/AB median exactly 1.050 (WITHIN) vs B/A clearly SLOWER', txt(lines(P({ ...AB_OK, ba: RAT.SLOWER, word: 'SLOWER', bab: '1.050[1.040..1.060]', wab: 'WITHIN' }))), 2, NVG, gN + ' REPS-DRIFT B/AB 1.050[1.040..1.060] reads WITHIN but B/A 1.500[1.490..1.510] reads SLOWER'],
-        ['judge Q-REPS ' + gN + ' reps differ, no AB bop', txt(lines(P({ ...AB_OK, bop: BOP4 }))), 2, NVG, gN + ' bop ' + BOP4 + ' not A, B, AA, SLOW, AB'],
-        ['judge Q-REPS ' + gN + ' equal reps with a finite B/AB', txt(lines(P({ bab: '1.000[0.990..1.010]' }))), 2, NVG, gN + ' B/AB=1.000[0.990..1.010] with equal reps'],
-        ['judge Q-REPS ' + gN + ' AB timed at A\'s reps (A:4,B:1,AB:4)', txt(lines(P({ ...AB_OK, reps: 'A:4,B:1,AB:4' }))), 2, NVG, gN + ' AB reps 4 (want B:1)'],
-        ['judge Q-REPS ' + gN + ' reps differ, AB reps not printed', txt(lines(P({ ...AB_OK, reps: 'A:4,B:1' }))), 2, NVG, gN + ' AB reps undefined (want B:1)'],
-        ['judge Q-REPS ' + gN + ' equal reps with an AB reps field', txt(lines(P({ reps: 'A:1,B:1,AB:1' }))), 2, NVG, gN + ' AB reps 1 with equal reps'],
-        ['judge Q-REPS ' + gN + ' B/AB q3 NaN', txt(lines(P({ ...AB_OK, bab: '1.000[0.990..NaN]' }))), 2, NVG, gN + ' B/AB 1.000[0.990..NaN] not finite'],
-        ['judge Q-REPS ' + gN + ' B\'s reps above A\'s (A:1,B:4,AB:4)', txt(lines(P({ ...AB_OK, reps: 'A:1,B:4,AB:4' }))), 0, 'VERDICT PASS', null],
-        ['judge Q-REPS ' + gN + ' reps unparsed', txt(lines(P({ reps: 'A:1' }))), 2, NVG, gN + ' reps A:1 unparsed'],
-        // R0 P5 boundary rows: one value ON each comparator boundary (or one step past), so a > / >= flip changes the verdict
-        ['judge B1 ' + gN + ' aa median exactly 0.950', txt(lines(P({ aa: '0.950[0.940..0.960]' }))), 0, 'VERDICT PASS', null],
-        ['judge B2 ' + gN + ' aa median exactly 1.050', txt(lines(P({ aa: '1.050[1.040..1.060]' }))), 0, 'VERDICT PASS', null],
-        ['judge B3 ' + gN + ' slow median exactly 1.250', txt(lines(P({ slow: '1.250[1.200..1.300]' }))), 2, NVG, gN + ' slow 1.250[1.200..1.300] not med'],
-        ['judge B4 ' + gN + ' slow q1 exactly 1.100', txt(lines(P({ slow: '2.000[1.100..2.100]' }))), 2, NVG, gN + ' slow 2.000[1.100..2.100] not med'],
-        ['judge B5 ' + gN + ' bop B exactly 1/64', txt(lines(P({ bop: 'A:0.0000,B:0.015625,AA:0.0000,SLOW:0.0000' }))), 2, NVG, gN + ' bop A:0.0000,B:0.015625'],
-        ['judge B6 ' + gN + ' B/A median exactly 1.050, WITHIN', txt(lines(P({ ba: '1.050[1.040..1.060]', word: 'WITHIN' }))), wordExit, wordPre, null],
-        ['judge B7 ' + gN + ' B/A q1 exactly 1.000, WITHIN', txt(lines(P({ ba: '1.100[1.000..1.200]', word: 'WITHIN' }))), wordExit, wordPre, null],
-        ['judge B8 ' + gN + ' B/A median exactly 0.950, WITHIN', txt(lines(P({ ba: '0.950[0.940..0.960]', word: 'WITHIN' }))), wordExit, wordPre, null],
-        ['judge B9 ' + gN + ' B/A q3 exactly 1.000, WITHIN', txt(lines(P({ ba: '0.900[0.800..1.000]', word: 'WITHIN' }))), wordExit, wordPre, null],
-        ['judge B10 ' + gN + ' aa q1 literal Infinity', txt(lines(P({ aa: '1.001[Infinity..1.003]' }))), 2, NVG, gN + ' aa 1.001[NaN..1.003] not finite'],
-        ['judge B10b ' + gN + ' slow median 1e309 digits (overflows to Infinity)', txt(lines(P({ slow: '1' + '0'.repeat(309) + '[1.900..2.100]' }))), 2, NVG, gN + ' slow Infinity[1.900..2.100] not finite'],
-        ['judge B11 ' + gN + ' bop A exactly -0 (>= 0 boundary)', txt(lines(P({ bop: 'A:-0.0000,B:0.0000,AA:0.0000,SLOW:0.0000' }))), 0, 'VERDICT PASS', null],
+    return [
+        // core 3
+        ['judge PASS (every gated lane its GATED word)', lines(), 0, 'VERDICT PASS gated=' + gatedIds.length + '/' + gatedIds.length, null],
+        ['judge FINDING (' + g0 + ' clean ' + flip + ')', lines({ [g0]: { w: flip } }), 3, 'VERDICT FINDING wrong-gated=[' + g0 + ' ' + flip, null],
+        ['judge NO VERDICT (' + gN + ' A/A 1.080)', lines(P({ aa: '1.080[1.070..1.090]' })), 2, NVG + ' not-clean=[' + gN + ' aa 1.080', null],
+        // (a)-(h): one gated lane not clean, each through the check it names; (j) FINDING wins over VOID (AB-G1)
+        ['judge (a) VOID NOT-TF line on ' + gN, voidLine(lines()), 2, NVG, gN + ' VOID-line(NOT-TF)'],
+        ['judge (b) VOID=[GC-WINDOW] tag on ' + gN, lines(P({ tail: ' VOID=[GC-WINDOW major 1]' })), 2, NVG, gN + ' VOID(GC-WINDOW)'],
+        ['judge (c) PROV end dropped', lines().slice(0, -1), 2, NVS, '0 PROV end lines (want 1)'],
+        ['judge (d) ' + gN + ' slow 1.200[1.150..1.250]', lines(P({ slow: '1.200[1.150..1.250]' })), 2, NVG, gN + ' slow 1.200[1.150..1.250] not med'],
+        ['judge (e) ' + gN + ' bop B:0.0200', lines(P({ bop: 'A:0.0000,B:0.0200,AA:0.0000,SLOW:0.0000' })), 2, NVG, gN + ' bop A:0.0000,B:0.0200'],
+        ['judge (f) ' + gN + ' slow q1 1.050', lines(P({ slow: '2.000[1.050..2.100]' })), 2, NVG, gN + ' slow 2.000[1.050..2.100] not med'],
+        ['judge (g) ' + gN + ' B/A q3 NaN', lines(P({ ba: RAT[wN].replace(/\.\.[^\]]*\]$/, '..NaN]') })), 2, NVG, gN + ' B/A not finite'],
+        ['judge (h) ' + gN + ' printed word ' + other + ', numbers kept', lines(P({ word: other })), 2, NVG, gN + ' printed word=' + other],
+        ['judge (j) FINDING ' + g0 + ' + VOID NOT-TF line on ' + gN, voidLine(lines({ [g0]: { w: flip } })), 3, 'VERDICT FINDING wrong-gated=[' + g0 + ' ' + flip, gN + ' VOID-line(NOT-TF)'],
+        // (i) run shape 12, each naming itself
+        ['judge (i) K=7', edit(lines(), ' K=' + K + ' ', ' K=7 '), 2, NVS, 'K=7 (want ' + K + ')'],
+        ['judge (i) K=' + (K + 1) + ' against the declared ' + K, edit(lines(), ' K=' + K + ' ', ' K=' + (K + 1) + ' '), 2, NVS, 'K=' + (K + 1) + ' (want ' + K + ')'],
+        ['judge (i) C=2', edit(lines(), ' C=' + C + ' ', ' C=2 '), 2, NVS, 'C=2 (want ' + C + ')'],
+        ['judge (i) inject=aa-drift', edit(lines(), ' inject=null', ' inject=aa-drift'), 2, NVS, 'inject=aa-drift (want null)'],
+        ['judge (i) rung=x', edit(lines(), 'HEADER rung=ALL ', 'HEADER rung=x '), 2, NVS, 'rung=x (want ALL)'],
+        ['judge (i) HEADER twice', [head, ...lines()], 2, NVS, '2 HEADER rung= lines (want 1)'],
+        ['judge (i) ' + gN + ' RESULT twice', dupRes(lines()), 2, NVS, 'several RESULT lines for ' + gN],
+        ['judge (i) STOP appended', [...lines(), 'STOP ORACLE: synthetic'], 2, 'VERDICT NO VERDICT (STOP ORACLE)', 'STOP ORACLE'],
+        ['judge (i) CRASH appended', [...lines(), 'CRASH Error: synthetic'], 2, 'VERDICT NO VERDICT (CRASH)', 'CRASH'],
+        ['judge (i) HEADER spec line dropped', lines().filter((l) => l !== specLine), 2, NVS, '0 HEADER spec lines (want 1)'],
+        ['judge (i) HEADER spec lane-sha256 of another lane file', swap(lines(), specLine, sp.laneSha, '0'.repeat(64)), 2, NVS, 'lane-sha256=00000000 (want ' + sp.laneSha.slice(0, 8) + ')'],
+        ['judge (i) HEADER spec transform= dropped', swap(lines(), specLine, / transform=\S+/, ''), 2, NVS, 'HEADER spec transform missing'],
+        // C-11 (Q-REPS-2) 14: rows (i)-(v), AB bop, equal reps, AB reps, B/AB NaN, B above A, unparsed, forged
+        ['judge Q-REPS (i) ' + gN + ' ab 1.818 (REPORTED) + B/AB agreeing', lines(P(AB_OK)), 0, 'VERDICT PASS', null],
+        ['judge Q-REPS (ii) ' + gN + ' B/AB reads ' + wAlt + ' vs B/A ' + wN, lines(P({ ...AB_OK, bab: RAT[wAlt], wab: wAlt })), 2, NVG, gN + ' REPS-DRIFT B/AB ' + RAT[wAlt] + ' reads ' + wAlt],
+        ['judge Q-REPS (iii) ' + gN + ' reps differ, B/AB missing', lines(P({ ...AB_OK, bab: 'n/a', wab: 'n/a' })), 2, NVG, gN + ' B/AB n/a not finite with reps A:4 != B:1'],
+        ['judge Q-REPS (iv) ' + gN + ' printed wordAB=' + wN + ' but B/AB numbers read ' + wAlt, lines(P({ ...AB_OK, bab: RAT[wAlt], wab: wN })), 2, NVG, gN + ' printed wordAB=' + wN + ' but B/AB'],
+        ['judge Q-REPS (v) ' + gN + ' B/AB median exactly 1.050 (WITHIN) vs B/A clearly SLOWER', lines(P({ ...AB_OK, ba: RAT.SLOWER, word: 'SLOWER', bab: '1.050[1.040..1.060]', wab: 'WITHIN' })), 2, NVG, gN + ' REPS-DRIFT B/AB 1.050[1.040..1.060] reads WITHIN but B/A 1.500[1.490..1.510] reads SLOWER'],
+        ['judge Q-REPS ' + gN + ' reps differ, no AB bop', lines(P({ ...AB_OK, bop: BOP4 })), 2, NVG, gN + ' bop ' + BOP4 + ' not A, B, AA, SLOW, AB'],
+        ['judge Q-REPS ' + gN + ' equal reps with a finite B/AB', lines(P({ bab: '1.000[0.990..1.010]' })), 2, NVG, gN + ' B/AB=1.000[0.990..1.010] with equal reps'],
+        ['judge Q-REPS ' + gN + ' AB timed at A\'s reps (A:4,B:1,AB:4)', lines(P({ ...AB_OK, reps: 'A:4,B:1,AB:4' })), 2, NVG, gN + ' AB reps 4 (want B:1)'],
+        ['judge Q-REPS ' + gN + ' reps differ, AB reps not printed', lines(P({ ...AB_OK, reps: 'A:4,B:1' })), 2, NVG, gN + ' AB reps undefined (want B:1)'],
+        ['judge Q-REPS ' + gN + ' equal reps with an AB reps field', lines(P({ reps: 'A:1,B:1,AB:1' })), 2, NVG, gN + ' AB reps 1 with equal reps'],
+        ['judge Q-REPS ' + gN + ' B/AB q3 NaN', lines(P({ ...AB_OK, bab: '1.000[0.990..NaN]' })), 2, NVG, gN + ' B/AB 1.000[0.990..NaN] not finite'],
+        ['judge Q-REPS ' + gN + ' B\'s reps above A\'s (A:1,B:4,AB:4)', lines(P({ ...AB_OK, reps: 'A:1,B:4,AB:4' })), 0, 'VERDICT PASS', null],
+        ['judge Q-REPS ' + gN + ' reps unparsed', lines(P({ reps: 'A:1' })), 2, NVG, gN + ' reps A:1 unparsed'],
+        ['judge Q-REPS ' + gN + ' forged AB:1/4', lines(P({ ...AB_OK, reps: 'A:4,B:1,AB:1/4' })), 2, NVG, gN + ' reps A:4,B:1,AB:1/4 unparsed'],
+        // C-12 / C-28 (warm) 4
+        ['judge warm ' + gN + ' RESULT warm=0', lines(P({ warm: ' warm=0' })), 2, NVS, 'RESULT warm=1 missing for 1 lane(s) ' + gN + ' (warm=0)'],
+        ['judge warm ' + gN + ' RESULT warm field missing', lines(P({ warm: '' })), 2, NVS, 'RESULT warm=1 missing for 1 lane(s) ' + gN + ' (no warm field)'],
+        ['judge warm ' + gN + ' RAW with K+1 values', lines(P({ rawN: K + 1 })), 2, NVS, 'RAW lane=' + gN + ' B/A holds ' + (K + 1) + ' values (want K=' + K + ')'],
+        ['judge warm ' + gN + ' WARM line dropped', lines().filter((l) => !l.startsWith('WARM lane=' + gN + ' ')), 2, NVS, 'WARM lines per lane not 1 for ' + gN + ':0'],
+        // PROV / HEADER provenance grammar 4 (tool dialect)
+        ['judge prov PROV start load dropped', swap(lines(), provS, ' load 0.00 0.00 0.00', ''), 2, NVS, 'PROV start line unparsed'],
+        ['judge prov PROV end timestamp altered', swap(lines(), provE, '2026-01-01T00:00:00.000Z', 'yesterday'), 2, NVS, 'PROV end line unparsed'],
+        ['judge prov HEADER arch dropped', edit(lines(), ' arch synthetic', ''), 2, NVS, 'HEADER arch missing'],
+        ['judge prov HEADER node dropped', edit(lines(), ' node v0.0.0', ''), 2, NVS, 'HEADER rung= line unparsed (no node field)'],
+        // R0 P5 boundary rows 12: one value ON each comparator boundary (or one step past), so a > / >= flip changes the verdict
+        ['judge B1 ' + gN + ' aa median exactly 0.950', lines(P({ aa: '0.950[0.940..0.960]' })), 0, 'VERDICT PASS', null],
+        ['judge B2 ' + gN + ' aa median exactly 1.050', lines(P({ aa: '1.050[1.040..1.060]' })), 0, 'VERDICT PASS', null],
+        ['judge B3 ' + gN + ' slow median exactly 1.250', lines(P({ slow: '1.250[1.200..1.300]' })), 2, NVG, gN + ' slow 1.250[1.200..1.300] not med'],
+        ['judge B4 ' + gN + ' slow q1 exactly 1.100', lines(P({ slow: '2.000[1.100..2.100]' })), 2, NVG, gN + ' slow 2.000[1.100..2.100] not med'],
+        ['judge B5 ' + gN + ' bop B exactly 1/64', lines(P({ bop: 'A:0.0000,B:0.015625,AA:0.0000,SLOW:0.0000' })), 2, NVG, gN + ' bop A:0.0000,B:0.015625'],
+        ['judge B6 ' + gN + ' B/A median exactly 1.050, WITHIN', lines(P({ ba: '1.050[1.040..1.060]', word: 'WITHIN' })), wordExit, wordPre, null],
+        ['judge B7 ' + gN + ' B/A q1 exactly 1.000, WITHIN', lines(P({ ba: '1.100[1.000..1.200]', word: 'WITHIN' })), wordExit, wordPre, null],
+        ['judge B8 ' + gN + ' B/A median exactly 0.950, WITHIN', lines(P({ ba: '0.950[0.940..0.960]', word: 'WITHIN' })), wordExit, wordPre, null],
+        ['judge B9 ' + gN + ' B/A q3 exactly 1.000, WITHIN', lines(P({ ba: '0.900[0.800..1.000]', word: 'WITHIN' })), wordExit, wordPre, null],
+        ['judge B10 ' + gN + ' aa q1 literal Infinity', lines(P({ aa: '1.001[Infinity..1.003]' })), 2, NVG, gN + ' aa 1.001[NaN..1.003] not finite'],
+        ['judge B10b ' + gN + ' slow median 1e309 digits (overflows to Infinity)', lines(P({ slow: '1' + '0'.repeat(309) + '[1.900..2.100]' })), 2, NVG, gN + ' slow Infinity[1.900..2.100] not finite'],
+        ['judge B11 ' + gN + ' bop A exactly -0 (>= 0 boundary)', lines(P({ bop: 'A:-0.0000,B:0.0000,AA:0.0000,SLOW:0.0000' })), 0, 'VERDICT PASS', null],
     ];
-    // (j) FINDING wins over VOID (AB-G1): a clean gated lane reading another word + a VOID line on a different gated lane
-    if (g0 !== gN) rows.push(['judge (j) FINDING ' + g0 + ' + VOID NOT-TF line on ' + gN, txt(voidLine(lines({ [g0]: { w: flip } }))), 3, 'VERDICT FINDING wrong-gated=[' + g0 + ' ' + flip, gN + ' VOID-line(NOT-TF)']);
-    return rows;
+}
+/** J2 (TASK 3): 3 rows on the CONSUMER's own judging spec (its lane ids, GATED, HEADER shape, declared K / C and its
+ *  lane-sha256), through a child --verdict-file - (the real exit mapping): [name, log text, exit, prefix, substring]. */
+function consumerRows(ctx) {
+    const sp = ctx.jspec, gatedIds = Object.keys(sp.gated);
+    const { lines } = synthLog(sp, ctx.spec.name, ctx.spec.frozen.map((f) => f.name));
+    const txt = (ls) => ls.join('\n') + '\n';
+    const g0 = gatedIds[0], gN = gatedIds[gatedIds.length - 1];
+    const flip = sp.gated[g0] === 'SLOWER' ? 'WITHIN' : 'SLOWER';
+    return [
+        ['consumer PASS (every gated lane its GATED word)', txt(lines()), 0, 'VERDICT PASS gated=' + gatedIds.length + '/' + gatedIds.length, null],
+        ['consumer FINDING (' + g0 + ' clean ' + flip + ')', txt(lines({ [g0]: { w: flip } })), 3, 'VERDICT FINDING wrong-gated=[' + g0 + ' ' + flip, null],
+        ['consumer NO VERDICT (' + gN + ' A/A 1.080)', txt(lines({ [gN]: { aa: '1.080[1.070..1.090]' } })), 2, 'VERDICT NO VERDICT (gated lane not clean) not-clean=[' + gN + ' aa 1.080', null],
+    ];
 }
 /** Untimed allocBop row (review r1 blocker 3): a window that scavenges must read Infinity (the null-window path); a
  *  non-allocating twin must read a finite 0 <= x < 1/64 (so the Infinity is the path, not a constant). */
@@ -1159,10 +1364,42 @@ function allocRow() {
     const bS = allocBop(scav, 1 << 16), bC = allocBop(clean, 1 << 12);
     return { ok: bS === Infinity && bC >= 0 && bC < ALLOC_MAX, txt: 'allocBop: scavenging window ' + bS + ' (want Infinity), clean window ' + fmt(bC, 4) + ' (want [0, 1/64))' };
 }
-function selftest(ctx) {
+/** The run's frozen HEADER line, as main prints it (C-30: a selftest run prints its own, so the frozen-only live-drift
+ *  row can prove 'live not bound (frozen only)' in the same run). */
+const frozenHeader = (f) => 'HEADER frozen ' + f.name + ' ' + f.frozen + ' sha256 ' + f.sha256.slice(0, 8) + ' ok; ' + (f.live === undefined ? 'live not bound (frozen only)' : 'live ' + f.live + ' byte-identical -- ok (AB-G2)');
+const FROZEN_ONLY_TAIL = ' ok; live not bound (frozen only)';
+/** A child that stopped before the clock printed no HEADER rung= / PROV start / CONTROL / WINDOW line. */
+const preClock = (out) => !/^(HEADER rung=|PROV start |CONTROL gc-window|WINDOW lane=)/m.test(out);
+const JUDGE_ROWS = 59;         // plan-GB A2: 58 verdictOf rows on the tool-owned spec + the empty-gated belt row
+const SELFTEST_UNTIMED = 5 + JUDGE_ROWS + 3;   // plan-GB A4 = 67: replay, allocRow, empty-gated, live-drift, frozen-drift, 59 judge, 3 consumer
+/** --selftest (untimed rows, then the timed children) and --selftest-untimed (the untimed rows only): 0 all ok | 1 FAIL.
+ *  Every row runs (a row that cannot run is a FAIL, never a skip) and ran === total is checked. */
+function selftest(ctx, untimedOnly) {
     let bad = 0, ran = 0;
     const row = (ok, txt, out) => { ran++; say(ctx, 'SELFTEST ' + txt + ' -> ' + (ok ? 'ok' : 'FAIL')); if (!ok) { bad++; if (out) for (const t of failReplay(out)) say(ctx, t); } };
-    // (1) ABOBS replay proof row (ab-gate :1171-1180), untimed, FIRST
+    // J2 (C-30): the same pre-clock source check a timed run makes (frozen sha256 pins, live byte identity), then this
+    // run's own frozen HEADER lines
+    loadSources(ctx, null);
+    for (const f of ctx.spec.frozen) say(ctx, frozenHeader(f));
+    const lanes = ctx.spec.lanes, l0 = lanes.find((l) => isGated(ctx, l.id));
+    const runId = (l0 === undefined ? lanes[0] : l0).id;
+    let TS = null;
+    try { TS = selftestSpec(ctx); } catch (e) { say(ctx, 'SELFTEST tool-owned judge spec refused: ' + e.message + ' -> FAIL'); bad++; }
+    const jr = TS === null ? [] : judgeRows(TS), cr = consumerRows(ctx);
+    // the timed slot (G-B2 / U8): the timed children on the FIRST gated lane (K = 3; warm-skew K = 1), + bent-oracle on
+    // every lane whose B entry differs; never built under --selftest-untimed
+    const cases = [];
+    if (!untimedOnly && l0 !== undefined) {
+        for (const name of ['bent-oracle', 'boxed', 'slow-dead', 'aa-drift', 'late-bend', 'post-bend', 'ab-drift', 'warm-skew', 'arr-bend', null]) cases.push([name, l0.id]);
+        const bkey = (l) => l.B.source + '\n' + l.B.anchor + '\n' + l.bend[0] + '\n' + l.bend[1];
+        const seen = new Set([bkey(l0)]);
+        for (const l of lanes) if (!seen.has(bkey(l))) { seen.add(bkey(l)); cases.push(['bent-oracle', l.id]); }
+    }
+    // planned BEFORE any row runs (A4): a row that is never built or never runs makes ran !== total (a FAIL, never a skip)
+    const untimed = SELFTEST_UNTIMED;
+    const total = untimed + cases.length;
+    // ---- untimed rows, FIRST
+    // (1) ABOBS replay proof row (ab-gate :1171-1180)
     const stub = ['HEADER rung=x TIMED (stub)', 'ORACLE lane=x:1 (stub)', 'RESULT lane=x:1 (gated) B/A=1.249[1.247..1.250] word=SLOWER (stub)',
         'RAW lane=x:1 B/A=1.2201,1.2472,1.2491 (stub)', 'VOID AA-DRIFT lane=x:1: AA-DRIFT 1.080[1.070..1.090] (stub)', 'PROV end, a mid-line RESULT is not replayed (stub)',
         'CRASH Error: stub (stub)', 'STOP STUB: the last line before the tail (stub)', 'RESULT lane=x:2 the first tail line (stub)'];
@@ -1172,36 +1409,63 @@ function selftest(ctx) {
     const wantPre = [stub[1], stub[2], stub[3], stub[4], stub[6], stub[7]];
     const okReplay = stub.length - 3 > 8 && got.length === wantPre.length + 1 && wantPre.every((l, i) => got[i] === l) && got[got.length - 1] === stubTail && String(row).includes('if (out) for (const t of failReplay(out)) say(ctx, t);');
     row(okReplay, 'replay: a failing timed child\'s RESULT / RAW lines ' + (stub.length - 2) + ' / ' + (stub.length - 3) + ' lines from the end (and its ORACLE / VOID lines) are replayed, then its last-8 tail unchanged', stubOut);
-    // (1b) untimed: allocBop's null-window path reads Infinity (blocker 3)
+    // (2) allocBop's null-window path reads Infinity (blocker 3)
     const ar = allocRow();
     row(ar.ok, ar.txt, null);
-    // (1c) untimed: a spec whose gated map is {} STOPs HARNESS, exit 1 (blocker 1)
+    // (3) a spec whose gated map is {} STOPs HARNESS, exit 1 (blocker 1)
     const eg = child(ctx, ['--verdict-file', '-'], envWith(SPEC_INJECT), '');
     const egOk = eg.status === 1 && eg.out.includes('STOP HARNESS: spec: gated must name at least one lane') && eg.vline !== null && eg.vline.startsWith('VERDICT NO VERDICT (STOP HARNESS)');
     row(egOk, 'empty-gated: exit ' + eg.status + ' (want 1) verdict ' + (eg.vline === null ? '(' + eg.nV + ' VERDICT lines)' : JSON.stringify(eg.vline.slice(0, 120))) + ' (want STOP HARNESS: spec: gated must name at least one lane)', egOk ? null : eg.out);
-    // (3) judge rows, untimed: synthetic logs through a child --verdict-file - (the real exit mapping)
-    const jr = judgeRows(ctx);
-    for (const [name, text, want, prefix, inc] of jr) {
+    // (4) live-drift, pre-clock. C-30: with no live binding the row is n/a, and passes ONLY with this run's frozen-only
+    // HEADER line for every frozen entry (printed above); a gate with a live binding runs the injected child
+    if (ctx.spec.frozen.some((f) => f.live !== undefined)) {
+        const sp = INJECTIONS['live-drift'];
+        const r = child(ctx, ['--run', runId, '--K', '3'], envWith('live-drift'), undefined);
+        const has = sp.marker.test(r.out), pre = preClock(r.out);
+        const ok = r.status === sp.want && has && pre && r.vline !== null && r.vline.startsWith(sp.verdict);
+        row(ok, 'live-drift ' + runId + ': exit ' + r.status + ' (want ' + sp.want + ') marker ' + String(sp.marker) + ' ' + (has ? 'present' : 'ABSENT') +
+            (pre ? ', stopped before the clock' : ', REACHED THE CLOCK') + ' verdict ' + (r.vline === null ? '(' + r.nV + ' VERDICT lines)' : JSON.stringify(r.vline.slice(0, 160))) +
+            ' (want ' + JSON.stringify(sp.verdict) + ')', ok ? null : r.out);
+    } else {
+        const n = ctx.log.filter((l) => l.startsWith('HEADER frozen ') && l.endsWith(FROZEN_ONLY_TAIL)).length, want = ctx.spec.frozen.length;
+        row(n === want, 'live-drift: n/a (frozen only): HEADER frozen lines ending "' + FROZEN_ONLY_TAIL.slice(5) + '" in this run ' + n + ' (want ' + want + ', C-30)', null);
+    }
+    // (5) frozen-drift, pre-clock: one byte of the first frozen file flipped as read -> the frozen-sha ANCHOR STOP
+    const fdSp = INJECTIONS['frozen-drift'], f0 = ctx.spec.frozen[0];
+    const fd = child(ctx, ['--run', runId, '--K', '3'], envWith('frozen-drift'), undefined);
+    const fdHas = fdSp.marker.test(fd.out), fdPre = preClock(fd.out);
+    const fdNames = fd.out.includes('STOP ANCHOR: frozen-sha ' + f0.frozen + ' sha256 ') && fd.out.includes(' (want ' + f0.sha256.slice(0, 8) + ')');
+    const fdOk = fd.status === fdSp.want && fdHas && fdNames && fdPre && fd.vline !== null && fd.vline.startsWith(fdSp.verdict);
+    row(fdOk, 'frozen-drift ' + f0.frozen + ': exit ' + fd.status + ' (want ' + fdSp.want + ') marker ' + String(fdSp.marker) + ' ' + (fdHas ? 'present' : 'ABSENT') +
+        (fdNames ? '' : ', the STOP does not name ' + f0.frozen + ' (want ' + f0.sha256.slice(0, 8) + ')') + (fdPre ? ', stopped before the clock' : ', REACHED THE CLOCK') +
+        ' verdict ' + (fd.vline === null ? '(' + fd.nV + ' VERDICT lines)' : JSON.stringify(fd.vline.slice(0, 160))) + ' (want ' + JSON.stringify(fdSp.verdict) + ')', fdOk ? null : fd.out);
+    // (6) the judge rows on the tool-owned spec, in-process (verdictOf is pure)
+    for (const [name, ls, want, prefix, inc] of jr) {
+        let v;
+        try { v = verdictOf(TS, ls); } catch (e) { v = { code: null, reported: '', text: 'verdictOf threw: ' + (e && e.message) }; }
+        const ok = v.code === want && v.text.startsWith(prefix) && (inc === null || v.text.includes(inc));
+        row(ok, name + ': code ' + v.code + ' (want ' + want + ') verdict ' + JSON.stringify(v.text.slice(0, 160)) + ' (want ' + JSON.stringify(prefix) + (inc === null ? '' : ' with ' + JSON.stringify(inc)) + ')', ok ? null : v.reported + '\n' + v.text);
+    }
+    // (7) the empty-gated belt (C-14): a spec object built without judgeSpec, gated {} -> code 2 in both dialects, never 0
+    if (TS !== null) {
+        const cleanLs = synthLog(TS, 'selftest', ['k.js']).lines();
+        const bt = verdictOf({ ...TS, gated: {} }, cleanLs), bl = verdictOf({ ...TS, gated: {}, dialect: DIALECT_7E }, cleanLs);
+        const ok = bt.code === 2 && bl.code === 2 && bt.text.startsWith('VERDICT NO VERDICT (judge spec) gated is empty') && bl.text.startsWith('VERDICT NO VERDICT (judge spec) gated is empty');
+        row(ok, 'judge belt empty gated: code ' + bt.code + ' (tool) / ' + bl.code + ' (' + DIALECT_7E + ') (want 2 / 2) verdict ' + JSON.stringify(bt.text.slice(0, 120)), ok ? null : bt.text + '\n' + bl.text);
+    }
+    // (8) the consumer's own spec: synthetic logs through a child --verdict-file - (the real exit mapping)
+    for (const [name, text, want, prefix, inc] of cr) {
         const r = child(ctx, ['--verdict-file', '-'], envWith(null), text);
         const ok = r.status === want && r.vline !== null && r.vline.startsWith(prefix) && (inc === null || r.vline.includes(inc));
         row(ok, name + ': exit ' + r.status + ' (want ' + want + ') verdict ' + (r.vline === null ? '(' + r.nV + ' VERDICT lines)' : JSON.stringify(r.vline.slice(0, 160))) + ' (want ' + JSON.stringify(prefix) + (inc === null ? '' : ' with ' + JSON.stringify(inc)) + ')', ok ? null : r.out);
     }
-    // (2) timed children on the FIRST gated lane (K = 3; warm-skew K = 1), + bent-oracle on every lane whose B entry differs
-    const lanes = ctx.spec.lanes, l0 = lanes.find((l) => isGated(ctx, l.id));
-    const cases = [];
-    if (l0 !== undefined) {
-        for (const name of ['bent-oracle', 'boxed', 'slow-dead', 'aa-drift', 'live-drift', 'late-bend', 'post-bend', 'ab-drift', 'warm-skew', 'arr-bend', null]) cases.push([name, l0.id]);
-        const bkey = (l) => l.B.source + '\n' + l.B.anchor + '\n' + l.bend[0] + '\n' + l.bend[1];
-        const seen = new Set([bkey(l0)]);
-        for (const l of lanes) if (!seen.has(bkey(l))) { seen.add(bkey(l)); cases.push(['bent-oracle', l.id]); }
-    }
-    const total = 3 + jr.length + cases.length;
+    // ---- the timed slot: children on the FIRST gated lane
     for (const [name, lane] of cases) {
         const others = lanes.length - 1;
         const spec = name === null ? { want: 2, marker: null, verdict: 'VERDICT NO VERDICT (run shape)', names: ['rung=' + lane + ' (want ALL)', 'K=3 (want ' + ctx.jspec.K + ')', ...(others > 0 ? ['no RESULT for ' + others + ' lane(s)'] : [])] } : INJECTIONS[name];
         const k = spec.K ?? 3;
         const r = child(ctx, ['--run', lane, '--K', String(k)], envWith(name), undefined);
-        const has = spec.marker === null ? !/^(STOP|CRASH) /m.test(r.out) : r.out.includes(spec.marker);
+        const has = spec.marker === null ? !/^(STOP|CRASH) /m.test(r.out) : spec.marker.test(r.out);
         let extra = '';
         if (spec.absent !== undefined && r.out.includes(spec.absent)) extra += ' ' + JSON.stringify(spec.absent) + ' PRESENT;';
         if (name === null) {
@@ -1222,13 +1486,15 @@ function selftest(ctx) {
         const ok = r.status === spec.want && has && extra === '' && r.vline !== null && r.vline.startsWith(spec.verdict) && !r.vline.includes('verdictOf crashed') &&
             (spec.names === undefined || spec.names.every((s) => r.vline.includes(s)));
         row(ok, (name === null ? 'clean' : name) + ' ' + lane + ' K=' + k + ': exit ' + r.status + ' (want ' + spec.want + ') ' +
-            (spec.marker === null ? 'no STOP / CRASH ' + (has ? 'ok' : 'VIOLATED') : 'marker ' + JSON.stringify(spec.marker) + ' ' + (has ? 'present' : 'ABSENT')) + extra +
+            (spec.marker === null ? 'no STOP / CRASH ' + (has ? 'ok' : 'VIOLATED') : 'marker ' + String(spec.marker) + ' ' + (has ? 'present' : 'ABSENT')) + extra +
             ' verdict ' + (r.vline === null ? '(' + r.nV + ' VERDICT lines)' : JSON.stringify(r.vline.slice(0, 200))) + ' (want ' + JSON.stringify(spec.verdict) + ')', ok ? null : r.out);
         // the replayed RESULT / VOID line of an injection child is printed even on ok, so its numbers stay in the log (B18)
         if (ok) for (const l of r.out.split('\n')) if (/^(RESULT|STOP|WARM) /.test(l)) say(ctx, 'SELFTEST   ' + l.slice(0, 460));
     }
     if (l0 === undefined) { bad++; say(ctx, 'SELFTEST no gated lane in the spec -> FAIL'); }
+    if (jr.length !== JUDGE_ROWS - 1 || cr.length !== 3) { bad++; say(ctx, 'SELFTEST rows built: judge ' + jr.length + ' + the belt (want ' + (JUDGE_ROWS - 1) + ' + 1), consumer ' + cr.length + ' (want 3) -> FAIL'); }
     if (ran !== total) { bad++; say(ctx, 'SELFTEST ran ' + ran + ' of ' + total + ' cases -> FAIL'); }
+    say(ctx, 'SELFTEST ran ' + ran + ' of ' + total + ' (untimed ' + untimed + ', timed ' + (untimedOnly ? 'not run: --selftest-untimed' : cases.length) + ')');
     say(ctx, 'SELFTEST ' + (bad === 0 ? 'all ok' : bad + ' FAIL'));
     return bad === 0 ? 0 : 1;
 }
@@ -1240,7 +1506,7 @@ async function main(ctx, o) {
     await loadSpec(ctx, o.laneFile, inject);
     if (o.verdictFile !== null) return verdictFile(ctx, o.verdictFile);
     armNatives();
-    if (o.selftest) return selftest(ctx);
+    if (o.selftest || o.selftestUntimed === true) return selftest(ctx, o.selftestUntimed === true);
     if (inject !== null && !Object.hasOwn(INJECTIONS, inject)) stop('CLI', INJECT_ENV + ' unknown: ' + inject);
     if (inject !== null && o.oracleOnly) stop('CLI', INJECT_ENV + ' is for timed runs only');
     // C-4 / C-19: no --K = the declared K; C is always the declared C (the judge checks both against the declared values)

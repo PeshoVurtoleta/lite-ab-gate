@@ -1,7 +1,7 @@
 // ABGate.d.ts -- @zakkster/lite-ab-gate: types for the STATISTICAL timing A/B gate.
 // MIT (c) Zahary Shinikchiev <shinikchiev@yahoo.com>
 // ASCII only. Matches ABGate.js export for export (names, optionality, readonly, literal types).
-// judgeSpec is declared in its RULED J1 shape (C-27); the J1 coder unit makes the code match and may adjust this delta.
+// judgeSpec / verdictOf match rung J1 (C-13, C-14, C-27, C-28, C-33).
 
 /** A verdict word printed per lane: B/A against the A/A band (C-5). (LaneRow.word and wordAB also admit 'NONE' = a non-finite median.) */
 export type Word = 'FASTER' | 'SLOWER' | 'WITHIN';
@@ -125,23 +125,23 @@ export interface GateSpec {
     readonly C?: number;
 }
 
-/** judgeSpec input (C-27). Band, SLOW and ALLOC limits are constants (AA_LO ...), not keys. */
+/** judgeSpec input (C-27): a PLAIN object; an unknown key throws (C-13). Band, SLOW and ALLOC limits are constants (AA_LO ...), not keys. */
 export interface JudgeSpecInput {
-    /** Every lane id of the gate. */
+    /** Every lane id of the gate (non-empty, unique, [A-Za-z0-9:._-]+). */
     readonly laneIds: readonly string[];
-    /** Lane id -> expected word; every key must be in laneIds. */
+    /** Lane id -> expected word; at least one entry (C-14), every key in laneIds, every word FASTER / SLOWER / WITHIN. */
     readonly gated: { readonly [laneId: string]: Word };
-    /** The extra HEADER shape pairs, as `[key, value]` in HEADER order. Default []. */
+    /** The extra HEADER shape pairs, as `[key, value]` string pairs in HEADER order (key letters / digits, unique; value no whitespace). Default []. */
     readonly shape?: ReadonlyArray<readonly [string, string]>;
-    /** Declared K the log must print. Default K_ROUNDS. */
+    /** Declared K the log must print: an integer in 11 .. 51 (C-4 / C-19). Default K_ROUNDS. */
     readonly K?: number;
-    /** Declared C the log must print. Default C_COPIES. */
+    /** Declared C the log must print: an integer in 3 .. 9 (C-4 / C-19). Default C_COPIES. */
     readonly C?: number;
-    /** The rung the log must name. Default 'ALL'. */
+    /** The rung the log must name (no whitespace). Default 'ALL'. */
     readonly run?: string;
-    /** The gate file's sha256 the HEADER spec line must carry. Omit = not checked. NOTE: it covers the top gate file only. */
+    /** The gate file's sha256 (64 lowercase hex) the HEADER spec line must carry: required in the tool dialect (C-33); judgeSpec throws if omitted. The legacy dialect ignores it. NOTE: it covers the top gate file only. */
     readonly laneSha?: string;
-    /** The one judge-only dialect: skips the 4 tool-only checks (HEADER spec line, reps / AB / n-a, warm, PROV grammar). API only, never from a gate file or the CLI. */
+    /** The one judge-only dialect: skips the 4 tool-only checks (HEADER spec line, reps / AB / n-a, warm (RESULT warm=1, WARM line, RAW of K values), PROV grammar (PROV start / end, HEADER arch)). API only, never from a gate file or the CLI. */
     readonly dialect?: 'ab-gate@7e0f9262';
 }
 
@@ -153,6 +153,7 @@ export interface JudgeSpec {
     readonly K: number;
     readonly C: number;
     readonly run: string;
+    /** 64 lowercase hex in the tool dialect (C-33); null in the legacy dialect. */
     readonly laneSha: string | null;
     readonly dialect?: 'ab-gate@7e0f9262';
 }
@@ -213,12 +214,18 @@ export declare const REQUIRED_FLAGS: readonly [
 export declare function defineGate(spec: GateSpec): Readonly<GateSpec>;
 
 /**
- * Build a judging spec. Throws when a gated id is not in laneIds. Note: lane-sha256 covers the top gate file only (its
- * imports stay module-cached).
+ * Build a validated, frozen judging spec. Throws an Error naming the first bad input: a non-plain object or an unknown key
+ * (with a did-you-mean hint), an unknown dialect, bad / duplicated lane ids, an empty gated map, a gated id not in laneIds,
+ * a bad word, K / C out of range, a bad shape or run, and in the tool dialect a laneSha that is missing or not 64 lowercase
+ * hex (C-33). Note: lane-sha256 covers the top gate file only (its imports stay module-cached).
  */
 export declare function judgeSpec(o: JudgeSpecInput): JudgeSpec;
 
-/** The pure verdict of a saved log (the live run and `--verdict-file` use the same function). No module state. */
+/**
+ * The pure verdict of a saved log (the live run and `--verdict-file` use the same function). No module state. A spec object
+ * not built by judgeSpec whose gated map is empty, whose tool-dialect laneSha is not 64 lowercase hex, or whose dialect is
+ * unknown reads code 2 (NO VERDICT, never 0). A non-object spec or a non-array `lines` throws a TypeError.
+ */
 export declare function verdictOf(spec: JudgeSpec, lines: readonly string[]): Judgement;
 
 /**

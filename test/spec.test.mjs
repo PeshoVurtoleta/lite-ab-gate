@@ -329,7 +329,7 @@ test('selftest judge rows follow the declared K / C (M31): K:13 C:4 -> every jud
 });
 
 // ============================================================ M04b: the selftest's live-drift row names the marker it checks
-test('selftest live-drift row reads its marker "STOP ANCHOR: live-drift " present and ok (M04b: the INJECTIONS marker constant)', async () => {
+test('selftest live-drift row reads its anchored marker /^STOP ANCHOR: live-drift .../m present and ok (M04b: the INJECTIONS marker RegExp, J2 C-21)', async () => {
     const text = await new Promise((resolve, reject) => {
         const c = spawn(process.execPath, [...FLAGS, ABGATE, TOY_GATE, '--selftest'], { env: cleanEnv(), stdio: ['ignore', 'pipe', 'pipe'], detached: true });
         let buf = '';
@@ -342,5 +342,5 @@ test('selftest live-drift row reads its marker "STOP ANCHOR: live-drift " presen
     const row = text.split('\n').find((l) => l.startsWith('SELFTEST live-drift '));
     assert.ok(row !== undefined, 'no live-drift row read');
     assert.ok(row.endsWith(' -> ok'), row.slice(0, 300));
-    assert.ok(row.includes('marker "STOP ANCHOR: live-drift " present'), row.slice(0, 300));
+    assert.match(row, /marker \/\^STOP ANCHOR: live-drift \\S\+ differs from the frozen .* present, stopped before the clock/, row.slice(0, 300));
 });
