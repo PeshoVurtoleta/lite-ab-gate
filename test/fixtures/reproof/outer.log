@@ -1,0 +1,36 @@
+OUTER u9-reproof hold=0 order=G,P,M,P,G
+DATE 2026-11-25T06:47:37.884Z
+HOST platform=darwin arch=arm64 cores=12 cpu=Apple M4 Pro
+NODE v26.8.2 v8 14.6.202.34-node.28
+LOAD start 2.90 3.14 4.82 baseline 2.21 quiet-lock quiet
+WHY QUIET (load1 2.80, baseline 2.21, 12 cores)
+BUSY start []
+SHA P 74f1a3d41e72e83fd5690bdae9005ce5dbf200ab05b906ca4249cb427d1068c4 /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/test/fixtures/r1/ab-proto.mjs
+SHA G d4991c39294d535b5f4464b42fd826ef72c5cf7ccd0a98769aec5715d3fd710d /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/.handoff/frozen/pre-J1b-311761f/ABGate.js
+SHA M 680526d7ef2b855c3f2565ea1efcdec655829b8edc4990f275ddd1d89533293e /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/.handoff/evidence/U9-cal/hold-0/M-ABGate.js
+SHA lane 2377d1937815b1d22d527a1ce2f9eeb4f0f496cf14065873d466657aea17c7e2
+SHA ohlc a600028c4cbba39086f93b21be34c57305e4d4acaec35d9faded8ac46dc275b2
+SHA baseline 9c875a5ecb9bf8ef26436254d72b8d9c2ba9345167bd4c4b7d93d6a567bbe89e
+SHA harness c4f04d4c5508aced84263bcc45e1bd84e04f5b015ff254eb232cf9989668ee6e
+RUNS 5 flags --expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc cwd /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/test/fixtures/r1
+CHILD 1 G exit 0 ms 34215 stderr-bytes 0 log-sha256 ef37ae76f25631948782f35ec6c5fd43476e7be9e4a911c0fb31e157b82a1851
+REJUDGE 1 G exit 0 verdict PASS match yes
+CHILD 2 P exit 0 ms 34349 stderr-bytes 0 log-sha256 eb85de0e0aa06eb15eceb615f6c30cee1a54014d9e7090c252096b347ce0eba1
+REJUDGE 2 P exit 0 verdict PASS match yes
+CHILD 3 M exit 2 ms 34309 stderr-bytes 0 log-sha256 3ad3fb1a3a0b28c2c3c3be321b6b788fa3d74013f3556cdaa328129c55250587
+REJUDGE 3 M exit 2 verdict NO VERDICT match yes
+CHILD 4 P exit 0 ms 33322 stderr-bytes 0 log-sha256 4306ad65ecf4ca360ae5d2eacfcdead7f840d5168dcfea05a881d509bfd5dce3
+REJUDGE 4 P exit 0 verdict PASS match yes
+CHILD 5 G exit 0 ms 33271 stderr-bytes 0 log-sha256 03fa13548410995f045fb7e25f313d4f614a3b60cd95afe2cd1a6964e5c5c04c
+REJUDGE 5 G exit 0 verdict PASS match yes
+LOAD end 1.99 2.80 4.39
+BUSY end []
+JUDGE lane bounds:1e5:1e3 r=0.9833 rAB=0.9823 t=1.0024 rM=1.0645
+JUDGE lane bounds:1e5:1e5 r=0.9872 rAB=1.0172 t=0.9792 rM=1.0422
+JUDGE lane null:1e5:1e3 r=1.0040 rAB=n/a t=1.0020 rM=1.0418
+JUDGE invalid 1-G start busy-node [11.4 75921 node] quiet-lock quiet
+JUDGE invalid 3-M VOID VERDICT NO VERDICT | bounds:1e5:1e3: NOT-TF NOT-TF tool timedRounds (TF at window start true, end false); NOT-TF tool timedRounds (TF at window start true, end false) | bounds:1e5:1e5: NOT-TF NOT-TF tool timedRounds (TF at window start false, end false); NOT-TF tool timedRounds (TF at window start false, end false) | null:1e5:1e3: NOT-TF NOT-TF tool timedRounds (TF at window start false, end false); NOT-TF tool timedRounds (TF at window start false, end false)
+JUDGE invalid bounds:1e5:1e5 twin t=0.9792 outside [0.98, 1.02]
+JUDGE kill 1-G bounds:1e5:1e5 tool-bytes=4320
+JUDGE kill 5-G bounds:1e5:1e5 tool-bytes=4320
+JUDGE hold 0 KILL
