@@ -88,6 +88,7 @@ const GATE_RE = /^(      AB_GATE: )(\S+)(  # PARAM: .*)$/;
 const OWN_GATE = 'examples/ab.gate.mjs';
 const CP_LINE = 'cp node_modules/@zakkster/lite-ab-gate/templates/ab.yml .github/workflows/ab.yml';
 const GATE_STEP = 'gate (--run ALL)';
+const IMAGEOS_LINE = '          : "${ImageOS:?unset}"';   // exact: ${ImageOS:-unset} would fail open on a runner with no image id
 // the timed-case count the selftest must report (ABGate.js selftest's summary line), as a POSIX ERE that JS reads alike;
 // accepts the timed run, rejects the untimed-only form and timed 0 (stopgate + the static row below)
 const COUNT_ERE = 'SELFTEST ran [0-9]+ of [0-9]+ \\(untimed [0-9]+, timed [1-9][0-9]*\\)';
@@ -110,15 +111,27 @@ const SUMMARY_SELFTEST = [
     'fi',
 ].join('\n');
 // real ABGate.js selftest summary lines: the timed run (examples/ab.gate.mjs, plan-U8 A1) and the two forms the gate must refuse
-const COUNT_OK = 'SELFTEST ran 78 of 78 (untimed 67, timed 11)';
-const COUNT_BAD = ['SELFTEST ran 67 of 67 (untimed 67, timed not run: --selftest-untimed)', 'SELFTEST ran 67 of 67 (untimed 67, timed 0)'];
+// The summary FORMAT is read from the producer: ABGate.js is read as text and the say(...) that prints the summary is found by its
+// literal pieces (never by line number). Not found exactly once -> a problem (fail closed), never a skip.
+const ABSRC = read('ABGate.js');
+const PRODUCER_RE = /^[ \t]*say\(ctx, '(SELFTEST ran )' \+ ran \+ '( of )' \+ total \+ '( \(untimed )' \+ untimed \+ '(, timed )' \+ \(untimedOnly \? '([^'\n]*)' : cases\.length\) \+ '(\))'\);$/gm;
+/** { ok, bad[] , problems[] } sample lines built from the producer's literal pieces. */
+function producerSamples(src) {
+    const ms = [...src.matchAll(PRODUCER_RE)];
+    if (ms.length !== 1) return { ok: '', bad: [], problems: ['ABGate.js: the selftest summary say(...) found ' + ms.length + ' times (want exactly 1)'] };
+    const [, a, b, c, d, untimedForm, e] = ms[0];
+    const line = (timed) => a + 78 + b + 78 + c + 67 + d + timed + e;
+    return { ok: line(11), bad: [line(untimedForm), line(0)], problems: [] };
+}
 /** The count problems of a POSIX ERE read as a JS whole-line regex (grep -x / sed ^...$). */
-function countProblems(ere) {
+function countProblems(ere, src = ABSRC) {
+    const s = producerSamples(src);
+    if (s.problems.length !== 0) return s.problems;
     let re;
     try { re = new RegExp('^(?:' + ere + ')$'); } catch (e) { return ['count regex does not compile: ' + e.message]; }
     const p = [];
-    if (!re.test(COUNT_OK)) p.push('count regex rejects the timed run ' + JSON.stringify(COUNT_OK));
-    for (const b of COUNT_BAD) if (re.test(b)) p.push('count regex accepts ' + JSON.stringify(b));
+    if (!re.test(s.ok)) p.push('count regex rejects the timed run ' + JSON.stringify(s.ok));
+    for (const b of s.bad) if (re.test(b)) p.push('count regex accepts ' + JSON.stringify(b));
     return p;
 }
 const GATE_RUN = [
@@ -307,6 +320,10 @@ const CHECKS = {
             if (stepRuns !== runBlocksOf(t).length) p.push(f + ': a run: block outside a step');
         }
         for (const [f, t] of WFS(w)) {
+            const n = linesOf(t).filter((l) => l === IMAGEOS_LINE).length;
+            if (n !== 1) p.push(f + ': ' + n + ' exact ImageOS guard lines (want 1): ' + IMAGEOS_LINE.trim());
+        }
+        for (const [f, t] of WFS(w)) {
             const st = stepsOf(t);
             const si = st.findIndex((s) => s.name === 'selftest'), gi = st.findIndex((s) => s.name === GATE_STEP);
             if (si < 0 || gi < 0 || gi < si) { p.push(f + ': selftest / gate steps missing or out of order'); continue; }
@@ -327,7 +344,11 @@ const CHECKS = {
             const r = runBlocksOf(s[0].text);
             const body = r.length === 1 ? dedent(r[0].text) : '';
             const lines = linesOf(body).map((l) => l.replace(/^  /, ''));
-            const i = lines.indexOf(linesOf(SUMMARY_SELFTEST)[0]);
+            const first = linesOf(SUMMARY_SELFTEST)[0];
+            const i = lines.indexOf(first);
+            const SELF_RE = /selftest|\bran=/i, want = linesOf(SUMMARY_SELFTEST).filter((l) => SELF_RE.test(l)).length;
+            const occ = lines.filter((l) => SELF_RE.test(l)).length;
+            if (occ > want) p.push(f + ': summary step has ' + (occ - want) + ' selftest line(s) outside the one STOP block (want exactly 1 block)');
             if (i < 0 || lines.slice(i, i + linesOf(SUMMARY_SELFTEST).length).join('\n') !== SUMMARY_SELFTEST) p.push(f + ': summary step lacks the exact selftest STOP block');
             const m = /sed -n -E 's\/\^SELFTEST \((.*)\)\$\/\\1\/p' logs\/selftest\.log/.exec(body);
             if (m === null) p.push(f + ': summary step has no selftest count capture');
@@ -440,6 +461,12 @@ const MUTANTS = [
     ['M31 summary count regex accepts timed 0', 'stopgate', mutant('both', 'timed [1-9][0-9]*\\))$/', 'timed [0-9]*\\))$/')],
     ['M32 summary selftest block dropped', 'stopgate', mutant('both', '            ' + linesOf(SUMMARY_SELFTEST).join('\n            ') + '\n', '')],
     ['M33 selftest count grep || true', 'failclosed', mutant('both', "grep -Eqx '" + COUNT_ERE + "' logs/selftest.log\n", "grep -Eqx '" + COUNT_ERE + "' logs/selftest.log || true\n")],
+    // U8 B3 review nits: summary block exactly once (fail-open copy second), ImageOS guard pinned
+    ['M34 summary selftest block duplicated, 2nd copy fail-open', 'stopgate', mutant('both', '            ' + linesOf(SUMMARY_SELFTEST).join('\n            ') + '\n',
+        '            ' + linesOf(SUMMARY_SELFTEST).join('\n            ') + '\n            ' + linesOf(SUMMARY_SELFTEST.replace("selftest: red or not run -> STOP -> NO VERDICT, never host evidence", 'selftest: all ok')).join('\n            ') + '\n')],
+    ['M35 (E3) ImageOS guard :- instead of :?', 'failclosed', mutant('both', IMAGEOS_LINE + '\n', '          : "${ImageOS:-unset}"\n')],
+    ['M36 comment-less fail-open selftest line after the block', 'stopgate', mutant('both', "              echo 'selftest: red or not run -> STOP -> NO VERDICT, never host evidence'\n            fi\n", "              echo 'selftest: red or not run -> STOP -> NO VERDICT, never host evidence'\n            fi\n" + "            echo 'selftest: all ok'\n")],
+    ['M37 ImageOS guard duplicated', 'failclosed', mutant('both', IMAGEOS_LINE + '\n', IMAGEOS_LINE + '\n' + IMAGEOS_LINE + '\n')],
 ];
 
 // ---------------------------------------------------------------- tests
@@ -462,9 +489,19 @@ for (const [what, target, mk] of MUTANTS) {
 test('the count regex: accepts the timed run, rejects untimed-only and timed 0; the loosened form is caught (control)', () => {
     assert.deepEqual(countProblems(COUNT_ERE), []);
     assert.ok(SELFTEST_RUN.includes("'" + COUNT_ERE + "'") && SUMMARY_SELFTEST.includes(COUNT_ERE.slice('SELFTEST '.length)), 'step and summary share COUNT_ERE');
-    assert.deepEqual(countProblems(COUNT_ERE.replace('[1-9][0-9]*', '[0-9]*')), ['count regex accepts ' + JSON.stringify(COUNT_BAD[1])]);
+    assert.deepEqual(countProblems(COUNT_ERE.replace('[1-9][0-9]*', '[0-9]*')), ['count regex accepts ' + JSON.stringify(producerSamples(ABSRC).bad[1])]);
     assert.equal(countProblems(COUNT_ERE.replace('timed [1-9][0-9]*', 'timed .*')).length, 2);
     assert.equal(countProblems(COUNT_ERE.replace('timed', 'timedX')).length, 1);
+});
+test('the summary format is read from the producer; a missing or duplicated producer say(...) fails closed (control)', () => {
+    const s = producerSamples(ABSRC);
+    assert.deepEqual(s.problems, []);
+    assert.equal(s.ok, 'SELFTEST ran 78 of 78 (untimed 67, timed 11)');   // the independent expected format, from the spec
+    assert.equal(s.bad.length, 2);
+    const piece = ABSRC.match(new RegExp(PRODUCER_RE.source, 'm'))[0];
+    assert.deepEqual(countProblems(COUNT_ERE, ABSRC.replace(piece, piece + '\n' + piece)), ['ABGate.js: the selftest summary say(...) found 2 times (want exactly 1)'], 'duplicated');
+    assert.deepEqual(countProblems(COUNT_ERE, ABSRC.replace(piece, piece.replace("' (untimed '", "' (untimedX '"))), ['ABGate.js: the selftest summary say(...) found 0 times (want exactly 1)'], 'renamed piece');
+    assert.deepEqual(countProblems(COUNT_ERE, ''), ['ABGate.js: the selftest summary say(...) found 0 times (want exactly 1)'], 'absent');
 });
 test('the real files are untouched by the mutants (in-memory only)', () => {
     assert.deepEqual(loadWorld(), WORLD);
