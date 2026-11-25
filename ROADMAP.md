@@ -18,10 +18,10 @@
   (`node ~/.claude/hooks/quiet-lock.mjs run "<what>" -- <cmd>`; `--strict` for a release-gating timing).
 - U9 statistical re-proof of the hoisted timed loop vs frozen ab-proto 74f1a3d4 is REQUIRED before 1.0 (C-23).
 
-## 2. SETTLED (binding for every agent; C-1..C-34)
+## 2. SETTLED (binding for every agent; C-1..C-47)
 
 C-3, C-13, C-14 and C-16 rest on suite law or R1 findings, and C-18..C-21 and C-29 are orchestrator / planner
-reconciliations; the other rows are maintainer rulings (the Q-id, where one exists, and the option label are in the SPEC).
+reconciliations, and C-46 records E1 behaviour (U3 review r1, A3); the other rows are maintainer rulings (the Q-id, where one exists, and the option label are in the SPEC).
 
 - C-1 HOME (Q-HOME (a)): a NEW single-file package, main ABGate.js, zero runtime deps, consumed as a
   devDependency; never a LitePerfGate mode or second file.
@@ -84,7 +84,7 @@ reconciliations; the other rows are maintainer rulings (the Q-id, where one exis
   columns of exactly K values; else NO VERDICT.
 - C-29 TEST FLOOR (orchestrator reconciliation, U1 2026-11-24): `node --test` with no matching file exits 0, so
   test/import.test.mjs imports ../ABGate.js and asserts a side-effect-free import (fails with ERR_MODULE_NOT_FOUND
-  until the engine exists, so npm test fails closed); the U10 docs test asserts a test-file floor. LEDGER B1.
+  until the engine exists, so npm test fails closed); the U10 docs test asserts a test-file floor. LEDGER B1. Owner rule (C-32 merged here): after the G-A B3 helper's import-adds-0-globalThis-keys check, the U10 docs batch is the file's only editor.
 - C-30 SELFTEST FROZEN-ONLY (Q-SELFTEST-LIVE (a) "Proven n/a row", maintainer 2026-11-24): when no frozen entry
   binds live, the --selftest live-drift row prints 'n/a (frozen only)' and does not fail, but ONLY if the frozen-only
   HEADER line ('live not bound (frozen only)') is present in the same run (else the row fails); a gate with a live
@@ -95,19 +95,52 @@ reconciliations; the other rows are maintainer rulings (the Q-id, where one exis
   node 22 / 24 / 26 but `npm run torture` only on the node 26 legs; test/torture.mjs exits 1 (never skips) on node < 26;
   the zero-tool-bytes claim is scoped to node >= 26; engines stays >= 22; the verdict host pin (AB_NODE 26.8.2) is
   unchanged.
-- C-32 IMPORT-TEST OWNER (maintainer 2026-11-25, burst 3 "Helper adds it now"): the G-A B3 helper adds the
-  import-adds-0-globalThis-keys check (+ its must-fail) to test/import.test.mjs; amends C-29 (afterwards the U10 docs
-  batch is again the file's only editor).
+- C-32 -- merged into C-29 (SPEC A11)
 - C-33 LANESHA (Q-LANESHA (a) "Require in tool dialect", maintainer 2026-11-25): in the tool dialect (dialect omitted)
-  judgeSpec THROWS when laneSha is missing / undefined / null or not 64 lowercase hex; verdictOf returns code 2 (NO
-  VERDICT) for a
+  judgeSpec THROWS when laneSha is missing / undefined / null or not 64 lowercase hex; verdictOf returns code 2 (NO VERDICT) for a
   tool-dialect spec with a bad laneSha; the legacy 'ab-gate@7e0f9262' dialect ignores laneSha (C-27); the d.ts keeps
-  `laneSha?` optional at type level; its doc says 'required in the tool dialect (C-33); judgeSpec throws if omitted'
-  (supersedes 'Omit = not checked').
+  `laneSha?` optional at type level; its doc says 'required in the tool dialect (C-33); judgeSpec throws if omitted'.
 - C-34 RAW / WARM AB (Q-WARMAB (a) "WARM mirrors AB", maintainer 2026-11-25; SPEC A7): tool dialect only (legacy
   unchanged). The AB rule of C-11 holds on RESULT, RAW and WARM: reps differ -> all three carry AB (RAW AB exactly K
   values, C-28); reps equal -> none does; every RAW value must parse as a finite number; any violation -> NO VERDICT
-  (code 2). To be implemented by unit U5b (burst 5).
+  (code 2). Implementing unit: U5b retry 2 (with C-42, C-47).
+- C-35 U9 HOST (Q-U9-HOST (a) "Local strict holds only"): the C-23 re-proof runs as 5 LOCAL `quiet-lock run --strict`
+  holds (one hold per call; the R1 lane binds absolute LiteOhlc paths, C-17 forbids that hosted); the hosted path is
+  proven separately by the C-24 dogfood dispatch at U11; U9 is PRELIMINARY unless QUIET.
+- C-36 U9 BAND (Q-U9-BAND (a) "Tight band, M x1.04"): pre-registered PASS = median over the 5 holds of r = (G1+G2)/(P1+P2)
+  (RESULT B/A medians, ABGate RC vs frozen ab-proto 74f1a3d4) in [0.98, 1.02] on every gated lane AND every per-hold r
+  in [0.95, 1.05]; the must-fail mutant scales B by 1.04 and must be flagged; INVALID twin band: t = P2/P1 outside
+  [0.95, 1.05] (C-44); every other INVALID condition as plan-U9-v1.md SPEC and C-45; KILL / STOP rules and the hold
+  budget (<= 8 attempts, never 2 in one burst) as plan-U9-v1.md SPEC.
+- C-37 CLASH (Q-CLASH (a) "Tool checks clash"): the tool's own --selftest fails a row when one real child line matches
+  >= 2 INJECTIONS markers (pure markerClash in ABGate.js selftest; extends C-21 to real output).
+- C-38 REALLINES (Q-REALLINES (a) "Commit real lines"): captured real timed-child lines are an npm test fixture
+  (test/fixtures/timed-real/lines.json); npm test checks the markers on them and goes red when the marker surface sha
+  changes ("re-capture via quiet-lock").
+- C-39 TIMEDHOME (Q-TIMEDHOME (a) "Local harness + script"): test/selftest.timed.mjs + an npm script, run under
+  `quiet-lock run --strict` before each dogfood dispatch; never inside npm test / verify (C-3).
+- C-40 WARMCOLS (Q-WARMCOLS (a) "Yes, exact WARM grammar"): TOOL dialect: WARM columns are exactly A/A B/A AA/A SLOW/A
+  [AB/A] in that order, each value NUM_RE / finite; else NO VERDICT (code 2). Engine unit U5c (not U5b).
+- C-41 RAWEXTRA (Q-RAWEXTRA (a) "Yes, unknown RAW column fails"): TOOL dialect: RAW columns are exactly B/A AA SLOW
+  [AB]; any other column -> NO VERDICT (code 2). Engine unit U5c, with C-40.
+- C-42 REPSUNP (Q-REPSUNP (a) "Run shape, any lane"): TOOL dialect: a lane (gated OR reported) whose RESULT reps field
+  is unparsed or duplicated -> run shape NO VERDICT (code 2), because the C-34 AB rule cannot be verified (C-14);
+  gated lanes' heading moves from "(gated lane not clean)" to "(run shape)"; the judge.rows / selftest expectations it moves are
+  re-pinned in the same engine unit (oracle edit, reviewed). Implementing unit: U5b retry 2.
+- C-43 U9 BYTES (Q-U9-BYTES (a) "Keep KILL, diagnose first"): G (ABGate.js 311761f / d4991c39) prints `WINDOW lane=bounds:1e5:1e5 tool-bytes=4320`
+  in 3/3 calibration G-family runs (tool verdict PASS); the C-36 KILL on G tool-bytes > 0 STANDS; diagnosis unit U9D runs BEFORE U9 B2; tool
+  bytes -> engine fix + a torture row on the R1 lane, otherwise the maintainer rules the rescoping.
+- C-44 U9 TWIN (Q-U9-TWIN (a) "Twin band = A/A band"): a hold is INVALID only when the twin t = P2/P1 is outside
+  [0.95, 1.05] (the C-4 A/A band); r bands (C-36) unchanged.
+- C-45 U9 READINGS (Q-U9-READ (a) "Confirm all three"): (1) a KILL from G inside an otherwise INVALID hold counts as
+  KILL; (2) "M fails to fire" is judged on M's median r' over the 5 holds; (3) a P FINDING makes the hold INVALID.
+- C-46 E1 PLAIN-OBJECT / HASH IMPORT (A3): the gate file is imported by content hash '?sha256=<laneSha>', so lane-sha256 names the spec that ran; runGate
+  options and every gate-spec object must be plain objects (own keys only; a prototype key or Symbol key -> STOP CLI / STOP HARNESS).
+  E1 behaviour, not a spec change (A3).
+- C-47 RESULTAB (Q-RESULTAB (a) "Run shape, any lane"): TOOL dialect: on EVERY lane (gated OR reported), when reps
+  differ the RESULT line carries ab, B/AB and wordAB, each present and not n/a, and exactly one AB: entry in bop; when
+  reps are equal, ab, B/AB and wordAB are all n/a and bop has no AB entry. Any violation -> run shape NO VERDICT (code
+  2). Implementing unit: U5b retry 2.
 
 Open maintainer questions: none.
 

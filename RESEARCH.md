@@ -1,7 +1,7 @@
 # RESEARCH -- @zakkster/lite-ab-gate
 
-> Status (2026-11-24): R0 done; R1 strict hold 5/5 PASS; R2a kill rule fired; R2b CLOSED unrun per C-7;
-> planner pass 1 done, SPEC C-1..C-28. Research artifacts live in `research/timing-ab/` (originals:
+> Status (2026-11-25): R0 done; R1 strict hold 5/5 PASS; R2a kill rule fired; R2b CLOSED unrun per C-7;
+> planner pass 1 done, SPEC C-1..C-47 (CURRENT consolidated through A10 at 224bf19 by A11; A12 since). Research artifacts live in `research/timing-ab/` (originals:
 > `LitePerfGate/.handoff/research/timing-ab/`).
 
 ## 1. A reusable STATISTICAL timing A/B gate (research burst 2026-11-23; R0 done, R1 / R2 pending)

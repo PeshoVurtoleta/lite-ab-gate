@@ -230,8 +230,7 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Evidence:** .handoff/evidence/U2-GA-census.md, U2-GA-census-b-1.log, -2, -3, -K1, -K7, -K11 (6 runs), census-a.log
   (gitignored run logs). Provenance as the census states it: darwin arm64, Apple M4 Pro, node v26.8.2 (v8
   14.6.202.34-node.28), 2026-11-24 05:59-06:00 UTC, quiet-lock run (no --strict), host verdict QUIET, load1 per run:
-  b-1/-2/-3 1.44, K1 1.82, K7 1.76, K11 1.76, census-a 1.44, baseline 2.21, busy-node none. Provenance: incomplete --
-  missing:
+  b-1/-2/-3 1.44, K1 1.82, K7 1.76, K11 1.76, census-a 1.44, baseline 2.21, busy-node none. Provenance: incomplete -- missing:
   the hosted / x86 result, and any run on ABGate.js.
 - **Law:** law 3 (an allocation gate must be able to see the box); law 4 (the baseline is a must-fail control).
 - **Reopens with:** a C entry re-measuring the window on ABGate.js; a node / V8 where census (a) reads > 0 B
@@ -258,7 +257,7 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 ### B2. Fail-closed workflow steps were checked by presence only, so `continue-on-error` / `|| true` / `set +e` / `|| echo` slipped through *(FOUND 2026-11-25, G-C B2 review r1 / r2; FIXED r3)*
 - **What happened:** the docs.template test for templates/ab.yml and the ci.yml check asserted that the fail-closed
   steps were present. Review r1 REJECTED 2 LITERAL findings (presence-only fail-closed checks; ci concurrency on
-  main); r2 REJECTED 1 LITERAL (`|| echo` and `set +eo` still slipped); r3 APPROVED. The suite is 12 checks / 29 mutants.
+  main); r2 REJECTED 1 LITERAL (`|| echo` and `set +eo` still slipped); r3 APPROVED. The suite is 13 checks / 37 mutants (U8 B3 added stopgate + M30..M33; FILL3 added M34..M37; .handoff/COMMIT_MSG-U8B3.txt, COMMIT_MSG-FILL3.txt).
 - **Root cause:** a check that a step exists does not see a neutralizer attached to it (`continue-on-error`, `|| true`,
   `set +e`, `|| echo`); the check passed on a workflow whose failure could not fail the job.
 - **Evidence:** .handoff/HISTORY.md (burst 3, G-C B2); .handoff/evidence/U4-GCB2-docs-template.log,
@@ -310,7 +309,7 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 ### B6. U2 r1: mask.mjs masked an all-NaN run equal and over-masked the PROV grammar *(FOUND 2026-11-24, U2 review r1; FIXED in the literal fix round, re-review APPROVED)*
 - **What happened:** review r1 REJECTED the golden mask (test/fixtures/golden/mask.mjs): an all-NaN run and three PROV
   mutants masked equal to the golden. Fixed: mask.mjs masks values only, non-finite values and PROV grammar stay
-  visible; mask teeth 18 / 18 per the U2 commit message.
+  visible; mask teeth 18 / 18 per U2-GA-fix1.log.
 - **Root cause:** a mask that hides too much turns a comparison into one that cannot see NaN or a broken PROV line
   (null is not zero).
 - **Evidence:** .handoff/HISTORY.md (burst 1, U2); .handoff/COMMIT_MSG-U2.txt; .handoff/evidence/
@@ -345,18 +344,62 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   ran === total mutant).
 - **Reopens with:** a selftest count or completeness check added without its own must-fail.
 
-### B9. U7: 4 RAW / WARM AB gaps in the J1 judge, 3 confirmed fail-opens plus the WARM AB / A rule *(FOUND 2026-11-25, U7; ruled C-34 / A7; FIX = U5b, burst 5 -- status: fix in progress, not yet approved)*
+### B9. U7: 4 RAW / WARM AB gaps in the J1 judge, 3 confirmed fail-opens plus the WARM AB / A rule *(FOUND 2026-11-25, U7; ruled C-34 / A7; status: retry r1 REJECTED DESIGN (C-47); diff parked .handoff/rejected/U5b2; fix = U5b retry 2)*
 - **What happened:** the U7 coder found, and the U7 reviewer confirmed, 4 gaps in the J1 judge: RAW AB missing with
   reps differing; a non-numeric RAW value; RAW AB present with equal reps (3 confirmed fail-opens); and the WARM AB / A
   rule, which the maintainer ruled in Q-WARMAB (a) "WARM mirrors AB". C-34: in the tool dialect the AB column rule
   of C-11 holds on RESULT, RAW and WARM, RAW AB has exactly K values, every RAW value parses as a finite number; a
   violation -> NO VERDICT (code 2).
-- **Root cause:** the AB rule was checked on the RESULT line only; RAW and WARM were not held to it, and RAW values
+- **Root cause:** the AB rule was checked on the RESULT line only, and there only as C-11 lane cleanliness (a reported lane got a NOT-CLEAN label that never reaches the verdict, B11 / C-47); RAW and WARM were not held to it, and RAW values
   were not required to be numeric.
 - **Evidence:** .handoff/HISTORY.md (burst 4, U7); .handoff/lite-ab-gate/SPEC.md C-34, addendum A7.
 - **Law:** law 4; suite law "null is not zero".
-- **Gate:** none yet (U5b adds the rows and must-fails).
-- **Reopens with:** U5b review APPROVED closes this entry; a RAW / WARM shape the C-34 rule does not reject reopens it.
+- **Gate:** none yet (U5b retry 2 adds the rows and must-fails).
+- **Reopens with:** U5b retry 2 review APPROVED closes this entry; a RAW / WARM shape the C-34 rule does not reject reopens it.
+
+### B10. U5b r1: a REPORTED lane with unparsed or duplicated RESULT reps skipped the C-34 AB rule and read PASS *(FOUND 2026-11-25 burst 5, U5b review r1 DESIGN; ruled C-42 / SPEC A9; fix = U5b retry 2, not yet approved)*
+- **What happened:** review r1 REJECTED the U5b diff (head ABGate.js 2205b4e3). A lane with exactly one RESULT whose reps
+  cannot be parsed (`reps=A:4,B:1,AB:1x`, or reps printed twice) got differ = null, so the RAW / WARM AB rule was never
+  checked; the verdict read PASS (code 0) even with RAW AB= and WARM AB/A= on that lane (reviewer probes P1, P1b, P1c).
+  The coder's comment "already NO VERDICT / NOT-CLEAN there" held only for GATED lanes. Also 1 LITERAL: no row printed
+  AB twice, so 2 mutants survived (test-only). The maintainer ruled C-42: run shape NO VERDICT on ANY lane.
+- **Root cause:** a REPORTED lane's NOT-CLEAN label never reaches the verdict; a check that only labels a reported lane
+  is fail-open (C-14, null is not zero).
+- **Evidence:** .handoff/rejected/U5b.restored-1795635615114/REVIEW-r1.md (the parked U5b diff, also named .handoff/rejected/U5b in HISTORY);
+  .handoff/lite-ab-gate/SPEC.md C-42, addendum A9; .handoff/HISTORY.md (burst 5).
+- **Law:** law 4; suite law "null is not zero".
+- **Gate:** none yet (U5b retry 2 adds the rows and must-fails).
+- **Reopens with:** U5b retry 2 review APPROVED closes this entry; a reps shape the C-42 rule does not reject reopens it.
+
+### B11. U5b retry r1: RESULT ab / B/AB / wordAB / bop AB columns unchecked on REPORTED lanes (two PASS probes) *(FOUND 2026-11-25 burst 6, U5b retry review r1 DESIGN; ruled C-47 / SPEC A12; fix = U5b retry 2, not yet approved)*
+- **What happened:** review r1 of the retry (head ABGate.js 9156bd9a) REJECTED DESIGN. The C-34 AB rule was enforced on a
+  REPORTED lane for RAW and WARM but not for RESULT. Probe (a): y:r reps=A:4,B:1,AB:1 with RESULT ab / B/AB / wordAB =
+  n/a and no AB entry in bop; probe (b): y:r equal reps but RESULT carrying ab / B/AB / wordAB values. Both read
+  `VERDICT PASS gated=1/1` code 0; only the `reported` label said NOT-CLEAN. The same RESULT on the gated lane read NO
+  VERDICT. B9's wording ("checked on the RESULT line only") read the other way, so the reviewer asked for a ruling;
+  the maintainer ruled C-47: run shape NO VERDICT on any lane. Also 1 LITERAL (no row with a RESULT lacking a reps
+  field; reviewer mutant R1 survived 100 / 100) and nits (mutant R2; Number() reps compare; d.ts / CHANGELOG omit C-34 / C-42).
+- **Root cause:** same mechanism as B10: a reported lane's NOT-CLEAN label never reaches the verdict. Lesson: the retry fixed the instance (unparsed reps, C-42) but not the class: any reported-lane line-family check
+  that only labels is fail-open. When a check is added for one line family, sweep every other family the same rule names
+  (RESULT, RAW, WARM, bop) on reported lanes before submitting.
+- **Evidence:** .handoff/rejected/U5b2/REVIEW-r1.md (diff parked in .handoff/rejected/U5b2); .handoff/lite-ab-gate/SPEC.md
+  C-47, addendum A12.
+- **Law:** law 4; suite law "null is not zero".
+- **Gate:** none yet (U5b retry 2 adds the rows and mutants).
+- **Reopens with:** U5b retry 2 review APPROVED closes this entry; a line family on a reported lane that still only labels reopens it.
+
+### B12. U9 B1: review findings on bench/reproof.mjs (r1: 3 fail-opens + 2 gate-teeth LITERAL; r2: 1 fail-open; r3: 2-line round) *(FOUND 2026-11-25 burst 5, U9 B1 review r1 / r2; FIXED r3, commit 224bf19)*
+- **What happened:** the U9 B1 coder delivered the C-23 re-proof probe (91 deterministic rows, mutation harness 62 / 62).
+  Review r1 REJECTED 5 LITERAL: three fail-opens (mixed Node versions, a missing harness line excluded silently, an
+  unenforced attempt budget), fixture symmetry (asymmetric G1-only / P1-only rows were missing), and 16 judge guards
+  without rows (gate teeth). r2 REJECTED 1 LITERAL fail-open: a cross-hold B/AB check had been removed as "dead code".
+  r3 APPROVED after a 2-line round. The per-finding review text is NOT on disk (overlay-U9B1 holds head-r1 / head-r2
+  code only, no review notes); the above is what HISTORY.md and COMMIT_MSG-U9B1.txt state, plus the overlay-U9B1 head-r1 / head-r2 test diff for the asymmetric rows.
+- **Root cause:** not recorded beyond the finding names above.
+- **Evidence:** .handoff/HISTORY.md (burst 5, U9 B1); .handoff/COMMIT_MSG-U9B1.txt; .handoff/evidence/U9-B1/ (gitignored run logs); .handoff/overlay-U9B1 head-r1 vs head-r2 test/reproof.judge.test.mjs (G1-only / P1-only rows first appear in head-r2).
+- **Law:** law 4 (a guard needs a row that fails on it alone).
+- **Gate:** test/reproof.judge.test.mjs (91 deterministic rows on judgeHolds in bench/reproof.mjs; npm test); the judge mutation harness (62 / 62 per COMMIT_MSG-U9B1.txt) is a one-off run (.handoff/evidence/U9-B1/task4-judge-mutants*.log), not a standing test.
+- **Reopens with:** a judge guard in bench/reproof.mjs with no row that fails on it alone.
 
 ## C. Measurements (this package's own runs on ABGate.js)
 
