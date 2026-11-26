@@ -183,9 +183,10 @@ reconciliations, C-46 records E1 behaviour (U3 review r1, A3), and C-60 records 
   goldens stay byte-identical. Implementing unit: U9E B1.
 - C-59 WORKFLOOR-KINDS (Q-WORKFLOOR-KINDS (a) "Reserve tool kinds", A21): the lane-spec contract reserves the tool's VOID
   kinds; a workFloor reason that starts with one (ALLOC, SLOW-DEAD, AA-DRIFT, any other tool VOID kind) is STOP SPEC,
-  pre-clock (fail closed). Implementing unit: a later judge / spec unit (+ LEDGER entry); README / d.ts note in U10.
+  pre-clock (fail closed). Implementing unit: WF1 (plan-C59-v1, A26: STOP HARNESS 'spec: ', prefix match, pre-clock
+  floorSweep over every (start, n) pair, kinds + format) (+ LEDGER entry); README / d.ts note in U10.
 - C-60 U8B2-GAPS (A21; binding for U8 B2): (G1) the timed-loop fold and the VOID replay get a permanent npm-test gate in
-  test/selftest.untimed.test.mjs (must-fail on a no-fold copy); (G2) markerClash cases: all 12 own lines joined in one
+  test/selftest.untimed.test.mjs (must-fail on a no-fold copy); (G2) markerClash cases: all 14 own lines (A26; was 12) joined in one
   output -> '', 2 clashing lines -> 2 clauses; (G3) the timed harness step (i) asserts >= 4 `SELFTEST   VOID ` lines.
 - C-61 REPROOF-ANCHOR (Q-REPROOF-ANCHOR (a) "Accept both forms", A22): bench/reproof.mjs buildMutant accepts exactly one match
   of /T\[1\] = (?:PERF|performance)\.now\(\);/ (0 or >= 2 -> throws); test/reproof.judge.test.mjs keeps its verbatim-311761f
@@ -197,6 +198,10 @@ reconciliations, C-46 records E1 behaviour (U3 review r1, A3), and C-60 records 
   column carries one guard of the same shape (only AA's reads __labWarm); (4) the row runs K = 3. Cold-path, injection-only: timedRounds /
   windowProbe / tierSettle and the --selftest-untimed output stay byte-identical. A3 kill (with (3) applied; counted AA > 1.05 without
   NOT-TF) -> the maintainer, Q-WARMSKEW-ROUND (b). Implementing unit: B15 (LEDGER B15).
+- C-63 CIJOBKEYS (Q-CIJOBKEYS (a) "Pin ci.yml jobs", A28): ci.yml jobs exactly `test`, a literal JOB_KEYS_CI key set
+  (quoted keys normalized), exact runs-on, mutants for quoted job-level continue-on-error / if: false. Implementing unit: FILL8.
+- C-64 CITOPKEYS (Q-CITOPKEYS (a) "Allowlist + exact defaults", A29): ci.yml top-level keys exactly name, on, permissions,
+  concurrency, defaults, jobs (quoted keys normalized, no top-level env), defaults block byte-exact. Implementing unit: FILL9.
 
 Open maintainer questions: none.
 

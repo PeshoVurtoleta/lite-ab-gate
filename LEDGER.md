@@ -507,6 +507,20 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Reopens with:** a selftest row whose injection precondition (differing reps, a TF counted round) is not checked
   by the row itself.
 
+### B16. A lane's workFloor reason could forge a tool VOID kind (ALLOC, SLOW-DEAD, AA-DRIFT, TIER-SETTLE ...) *(FOUND 2026-11-26 burst 8, U8 B1 review r1 nit 3 / coder F1; RULED C-59 / SPEC A21, A26; FIXED by WF1, burst 10)*
+- **What happened:** a lane's `workFloor` could return a reason that starts with a tool VOID kind, and the run printed it as
+  a `VOID <kind> lane=...` line, indistinguishable from the tool's own marker. The U8 B1 sweep forged `VOID AA-DRIFT`,
+  `VOID SLOW-DEAD` and `VOID ALLOC` through an adversarial workFloor (3 FOREIGN findings, exit 1).
+- **Root cause:** the workFloor reason check was shape-only ("<KIND> <text>"), applied only at the first non-null
+  (start, n) pair, and only after sizing; no check knew the tool's own kinds, and a later pair was never looked at.
+- **Evidence:** .handoff/evidence/U8-B1-sweep.log (lines 59-61); .handoff/evidence/C59/ (torture.log, golden-compare.log,
+  B3-*.log); .handoff/lite-ab-gate/plan-C59-v1.md; SPEC C-59, A26.
+- **Law:** law 4 (the expected value never comes from the thing it checks: a tool VOID kind came from the lane under test); law 5 (the reserved-kind STOP is an outcome defined before the run, never a VOID read after it); law 7 (a lane-spec failure is STOP -> NO VERDICT, never host evidence such as a forged VOID ALLOC); suite law "Fail closed on every unverified state".
+- **Gate:** test/workfloor.test.mjs R1-R8 + R2b, R8b, R8c (DETERMINISTIC, npm test: `--oracle-only` or a clock trap, no
+  timed number); mutants W1-W6 in test/mutants.json (group C-59, 133 total). WF1 review r1 REJECTED 3 LITERAL gate-teeth
+  gaps (uncapped ladder, sweep format check, format regex) -> r2 APPROVED.
+- **Reopens with:** a tool VOID kind emitted outside TOOL_VOID_KINDS (R7 reads only pushes whose first literal is a single-quoted kind followed by a space, `voids.push('KIND ...`, concatenated or not; a kind followed by a colon (`'ZZZ: ' + x`), a double-quoted string, a template literal or a variable is a known gap, FILLER).
+
 ## C. Measurements (this package's own runs on ABGate.js)
 
 Placement: the U9D numbers below were measured on ABGate.js d4991c39 (frozen copy of HEAD 224bf19), so they are section C,
