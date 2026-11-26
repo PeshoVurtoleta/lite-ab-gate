@@ -25,7 +25,7 @@
 // Exits (as ab-gate :59-64): 0 PASS | 3 FINDING | 2 NO VERDICT | 1 STOP (ORACLE, ANCHOR, CLI, FLAGS, CLASSIFIER, HARNESS)
 // or CRASH. `--oracle-only`: 0 = no VOID on a gated lane, 2 = a VOID on a gated lane. `--selftest`: 0 / 1.
 // VOID kinds per lane: SLOW-DEAD, AA-DRIFT, REPS-DRIFT, NOT-TF, ALLOC, GC-WINDOW, NAN, TIER-SETTLE, plus the lane's workFloor
-// reason.
+// reason, which must not start with one of them (this list is TOOL_VOID_KINDS: reserved, C-59).
 // Rung E2 (C-23, Q-HOTLOOP (a)): the in-window loop is the TF-forced timedRounds (t0 / t1 in a Float64Array(2) slot),
 // armed once per timed run on 5 tool-owned dummy entries; not TF across a window = VOID NOT-TF (tool). Each timed lane
 // prints `WINDOW lane=<id> tool-bytes=<n> scavenges=<k>` (new-space bytes allocated in the window, net of the probe).
@@ -45,6 +45,7 @@
 //            GITHUB_ACTIONS=true, C-25 / C-17). No live path = frozen only (the HEADER says so).
 //   lane = { id, ops (power of two >= 4), minWindow (1..ops/2), spin, recLen, A: col, B: col, bend: [from, to],
 //            make() -> { data, ref(op, out, off), foldOf(rec, off) -> int32 }, workFloor?(start, n) -> reason | null }
+//            (reason = "<KIND> <text>" that must not start with a TOOL_VOID_KINDS entry: reserved, else STOP HARNESS pre-clock, C-59)
 //   col  = { source: <frozen name>, anchor: <unique text ending in '{' = the opening of the entry body>,
 //            setup: 'function setup(d) {...}' (returns the copy state), run: 'function run(st, start, n, reps) {...}'
 //            (int32 fold over ops [start, start + n) x reps), one: 'function one(st, op) {...}' (returns a Float64Array
@@ -118,6 +119,9 @@ const AB_DRIFT_X = 64;   // ab-drift only, any lane: AB = A spun 64 x the lane s
 // much) and disagrees with B/A; runLane forces B's reps to reps >>> 1 (1 -> 2) when sizing gave B A's reps (C-62), so AB is always timed
 const LANE_ID_RE = /^[A-Za-z0-9:._-]+$/;
 const WORDS = Object.freeze(['FASTER', 'SLOWER', 'WITHIN']);
+// C-59: the tool's own VOID kinds (the list at the top of this file), reserved: a workFloor reason that starts with one is
+// STOP HARNESS (floorCheck, pre-clock in floorSweep and again in floorReason)
+const TOOL_VOID_KINDS = Object.freeze(['SLOW-DEAD', 'AA-DRIFT', 'REPS-DRIFT', 'NOT-TF', 'ALLOC', 'GC-WINDOW', 'NAN', 'TIER-SETTLE']);
 
 class Stop extends Error { constructor(reason, msg) { super(msg); this.reason = reason; } }
 function stop(reason, msg) { throw new Stop(reason, msg); }
@@ -625,16 +629,43 @@ function sizeReps(e, n) {
     return reps;
 }
 const roundStart = (L, r) => Math.imul(r + 1, 39313) & (L.NQ - 1);
+/** C-59: a non-null workFloor reason must read "<KIND> <text>" and must not start with a tool VOID kind (TOOL_VOID_KINDS,
+ *  prefix match); else STOP HARNESS. Shared by floorSweep (pre-clock) and floorReason (the backstop). */
+function floorCheck(id, r, start, n) {
+    if (typeof r !== 'string' || !/^[A-Z][A-Z0-9-]* /.test(r)) stop('HARNESS', id + ': workFloor reason must be "<KIND> <text>", got ' + JSON.stringify(r));
+    const k = TOOL_VOID_KINDS.find((v) => r.startsWith(v));
+    if (k !== undefined) stop('HARNESS', 'spec: ' + id + '.workFloor(' + start + ', ' + n + ') reason ' + JSON.stringify(r) + ' starts with the tool VOID kind ' + k + ' (reserved, C-59)');
+}
 function floorReason(L, starts, n) {
     if (L.spec.workFloor === undefined) return null;
     for (let x = 0; x < starts.length; x++) {
         const r = L.spec.workFloor(starts[x], n);
         if (r !== null) {
-            if (typeof r !== 'string' || !/^[A-Z][A-Z0-9-]* /.test(r)) stop('HARNESS', L.id + ': workFloor reason must be "<KIND> <text>", got ' + JSON.stringify(r));
+            floorCheck(L.id, r, starts[x], n);
             return r;
         }
     }
     return null;
+}
+/** C-59 pre-clock: floorCheck at EVERY (start, n) pair a run can ask workFloor, for every selected lane, in both modes,
+ *  before any clock read; silent on success. n = the sizeWindow ladder (minWindow, doubling, capped at NQ; --oracle-only
+ *  asks its first rung); starts = roundStart of 2000 and of [0, K) (runLane's; --oracle-only asks [0, K)). From the spec
+ *  fields only (no make()). */
+function floorSweep(ctx, sel, K) {
+    for (const l of ctx.spec.lanes) {
+        if (!sel.includes(l.id) || l.workFloor === undefined) continue;
+        const Q = { NQ: l.ops >>> 1 };
+        const starts = new Int32Array(K + 1);
+        starts[0] = roundStart(Q, 2000);
+        for (let x = 0; x < K; x++) starts[x + 1] = roundStart(Q, x);
+        for (let n = l.minWindow; ; n = Math.min(Q.NQ, n * 2)) {
+            for (let x = 0; x < starts.length; x++) {
+                const r = l.workFloor(starts[x], n);
+                if (r !== null) floorCheck(l.id, r, starts[x], n);
+            }
+            if (!(n < Q.NQ)) break;
+        }
+    }
 }
 
 // ---------------------------------------------------------------- oracle-only lane (no clock; ab-gate :694-725)
@@ -1731,6 +1762,7 @@ async function main(ctx, o) {
     // C-4 / C-19: no --K = the declared K; C is always the declared C (the judge checks both against the declared values)
     const K = o.K === null ? ctx.jspec.K : o.K, C = ctx.jspec.C;
     const sel = laneSelection(ctx, o.run);
+    floorSweep(ctx, sel, K);   // C-59: every workFloor pair checked before loadSources, HEADER, gcControl and any clock read
     const SRC = loadSources(ctx, inject);
     const runName = sel.length === ctx.spec.lanes.length ? 'ALL' : sel.join(',');
     say(ctx, 'HEADER rung=' + runName + (o.oracleOnly ? ' ORACLE-ONLY (no clock)' : ' TIMED') + ' node ' + process.version + ' arch ' + process.arch + ' v8 ' + process.versions.v8 +

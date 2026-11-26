@@ -1512,6 +1512,66 @@
       "files": [
         "test/hotbody.parity.test.mjs"
       ]
+    },
+    {
+      "id": "W1-noFloorSweep",
+      "group": "C-59",
+      "why": "C-59: the pre-clock floorSweep call in main dropped; only the floorReason backstop (first rung, after sizing) is left (killer: R1 every-pair / R2 n=512 / R5 clock trap)",
+      "find": "floorSweep(ctx, sel, K);   // C-59: every workFloor pair",
+      "replace": "// C-59: every workFloor pair",
+      "files": [
+        "test/workfloor.test.mjs"
+      ]
+    },
+    {
+      "id": "W2-reservedNever",
+      "group": "C-59",
+      "why": "C-59: the reserved-kind condition in floorCheck -> false; a forged tool VOID kind passes as a lane VOID (killer: R1 / R2 / R3 / R4 / R5 / R6 NANO)",
+      "find": "if (k !== undefined) stop('HARNESS', 'spec: '",
+      "replace": "if (false) stop('HARNESS', 'spec: '",
+      "files": [
+        "test/workfloor.test.mjs"
+      ]
+    },
+    {
+      "id": "W3-noTierSettleKind",
+      "group": "C-59",
+      "why": "C-59: TIER-SETTLE dropped from TOOL_VOID_KINDS; a forged TIER-SETTLE reason passes (killer: R1 TIER-SETTLE rows, R7 drift gate)",
+      "find": "'GC-WINDOW', 'NAN', 'TIER-SETTLE']);",
+      "replace": "'GC-WINDOW', 'NAN']);",
+      "files": [
+        "test/workfloor.test.mjs"
+      ]
+    },
+    {
+      "id": "W4-uncappedLadder",
+      "group": "C-59",
+      "why": "C-59: the floorSweep ladder doubles past NQ instead of capping at it; with a non-power-of-two minWindow (48) n = 512 is never asked (killer: R2b)",
+      "find": "for (let n = l.minWindow; ; n = Math.min(Q.NQ, n * 2))",
+      "replace": "for (let n = l.minWindow; ; n = n * 2)",
+      "files": [
+        "test/workfloor.test.mjs"
+      ]
+    },
+    {
+      "id": "W5-sweepSkipsNonString",
+      "group": "C-59",
+      "why": "C-59 P4: floorSweep format-checks only string reasons; a non-string reason reaches the clock before the floorReason backstop (killer: R8b)",
+      "find": "if (r !== null) floorCheck(",
+      "replace": "if (typeof r === 'string') floorCheck(",
+      "files": [
+        "test/workfloor.test.mjs"
+      ]
+    },
+    {
+      "id": "W6-noFormatRegex",
+      "group": "C-59",
+      "why": "C-59: the \"<KIND> <text>\" regex dropped from floorCheck; a leading-space / lowercase reason passes and a bare kind reads reserved (killer: R8c)",
+      "find": " || !/^[A-Z][A-Z0-9-]* /.test(r)",
+      "replace": "",
+      "files": [
+        "test/workfloor.test.mjs"
+      ]
     }
   ]
 }
