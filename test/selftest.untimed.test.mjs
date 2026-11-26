@@ -9,13 +9,27 @@
 //      matches its OWN rendered message and no other; must-fail controls: the old literals ('STOP ANCHOR: live ',
 //      'STOP ANCHOR: live', 'STOP ORACLE', 'WARM lane='), an unanchored and a global RegExp.
 //   4. --selftest-untimed takes no other flag (C-15 exit 1, STOP CLI).
+//   U8 B2 (plan-U8 TASK 3, A3; SPEC C-37, C-38, C-58, C-60 G1 / G2). DETERMINISTIC: no child here reaches the clock.
+//   5. C-38: the marker gate on REAL timed-child lines (test/fixtures/timed-real/lines.json, captured by
+//      test/selftest.timed.mjs --capture under quiet-lock): markerRealGate / childGate / realControls (shared with the
+//      harness in test/fixtures/timed-real/surface.mjs) + the SYNTH-style table gate on the real own lines. A missing
+//      lines.json is red (fail closed, never a skip).
+//   6. C-38 staleness: surfaceSha (surface.mjs, the one definition) recomputed on ABGate.js must equal the captured one,
+//      else red "re-capture via quiet-lock"; must-fail: a flipped sha, an edited marker, an edited PIN.
+//   7. markerClash (C-37), sliced from ABGate.js: 0 clashes on lines.json, 1 on a built 2-marker line; C-60 G2: every
+//      marker's own line joined in one output -> '', 2 clashing lines -> 2 clauses; must-fail: a `>= 3` copy.
+//   8. C-60 G1: the timed loop's markerClash fold + passing-row VOID replay, and the C-58 untimed fold (live-drift /
+//      frozen-drift), sliced from ABGate.js and driven by stub children with a loosened marker table; must-fail on
+//      no-fold copies and on the pre-U8 replay regex.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PINS, injectionsBlock, surfaceSha, staleText, CHILDREN, KEEP_RE, TIMED, markerRealGate, childGate, realControls } from './fixtures/timed-real/surface.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ABGATE = join(ROOT, 'ABGate.js');
@@ -202,20 +216,7 @@ const SYNTH = {
     'no-settle': 'SETTLE lane=jl:clean skipped (AB_GATE_INJECT=no-settle)',
     'settle-void': 'VOID TIER-SETTLE lane=jl:clean: TIER-SETTLE pass-bytes 64,64,64 (cap 3, none read exactly 0)',
 };
-const PINS = [
-    "say(ctx, e instanceof Stop ? 'STOP ' + e.reason + ': ' + e.message",
-    "say(ctx, 'VOID ' + v.split(' ')[0] + ' lane=' + L.id + ': ' + v);",
-    "' (' + where + ') op ' + op + ' field ' + k + ' got ' + got[k] + ' want ' + ex[op * R + k]",
-    "verifyAll(e, L, L.expect, 'after the oracle pass')", "verifyAll(e, L, fresh, 'after timing, fresh reference')",
-    "' fold (' + where + '): got ' + got + ' want ' + want", "verifyRun(e, got, e.wants[x], L, 'timed')",
-    "' data.' + k + ' (' + where + ') differs from the lane data'", "stop('ORACLE', at + ' at byte ' + i)", "checkArr(e, L, 'after warm')",
-    "voids.push('ALLOC ' + c + ' ' + fmt(bop[c], 3) + ' B/op')", "voids.push('SLOW-DEAD ' + fmtS(slow, 3))", "voids.push('AA-DRIFT ' + fmtS(aa, 3))",
-    "voids.push('REPS-DRIFT B/AB ' + fmtS(bab, 3) + ' reads ' + wordAB + ' but B/A ' + fmtS(ratio, 3) + ' reads ' + word(ratio) + ' (AB = A at B\\'s reps ' + repsB + ' vs A\\'s ' + reps + ')')",
-    "'WARM lane=' + L.id + ' round 0 (discarded, not in any median) ' + liveCols.map((c) => c.id + '/A=' + fmt(warm0[c.id] / warm0.A, 4)).join(' ')",
-    "voids.push('NOT-TF tool timedRounds (TF at window start ' + toolTfStart + ', end ' + toolTfEnd + ')')",
-    "say(ctx, 'SETTLE lane=' + L.id + ' skipped (' + INJECT_ENV + '=no-settle)')",
-    "settleVoid = 'TIER-SETTLE pass-bytes ' + pb + ' (cap ' + TIER_SETTLE_CAP + ', none read exactly 0)'",
-];
+// PINS (the pinned message templates) live in test/fixtures/timed-real/surface.mjs: they are part of the C-38 surface sha
 // Lines other failures (or clean runs) print: no marker may match any of them
 const OTHERS = [
     'WARM lane=jl:clean round 0 (discarded, not in any median) A/A=1.0000 B/A=1.0012 AA/A=1.0031 SLOW/A=2.0144',
@@ -287,6 +288,209 @@ test('marker gate (C-21): each of the 14 INJECTIONS markers is an anchored RegEx
     const loose = withMarker('no-settle', /^SETTLE lane=/m);
     assert.deepEqual(reasons(loose), ['no-settle: also matches ' + JSON.stringify(SETTLE_OK)]);
     assert.deepEqual(markerGate(loose, rendered, others.filter((l) => l !== SETTLE_OK)), [], 'without the ordinary SETTLE line the loosened marker is accepted');
+});
+
+// ============================================================ U8 B2: real lines (C-38), staleness, markerClash (C-37 / C-60 G2), the folds (C-60 G1, C-58)
+const LINES = join(ROOT, 'test', 'fixtures', 'timed-real', 'lines.json');
+/** lines.json, read per row: a missing or unparsable fixture throws, so that row is red (fail closed, never a skip). */
+const realDoc = () => JSON.parse(readFileSync(LINES, 'utf8'));
+/** The text of `src` from `from` (included, exactly once) to the first `to` after it (excluded). */
+function between(src, from, to) {
+    const a = src.indexOf(from);
+    assert.ok(a >= 0 && src.indexOf(from, a + 1) < 0, 'slice start not found exactly once: ' + from);
+    const z = src.indexOf(to, a + from.length);
+    assert.ok(z > a, 'slice end not found: ' + to);
+    return src.slice(a, z);
+}
+/** An exact-once replacement (a mutant / control copy of the source text). */
+function once(src, from, to) {
+    const i = src.indexOf(from);
+    assert.ok(i >= 0 && src.indexOf(from, i + 1) < 0, 'mutant site must match exactly once: ' + from);
+    return src.slice(0, i) + to + src.slice(i + from.length);
+}
+/** markerClash sliced from the source text, bound to `table` as its INJECTIONS. */
+const clashOf = (src, table) => new Function('INJECTIONS', between(src, 'function markerClash(out) {', '\n/** --selftest (untimed rows') + '\nreturn markerClash;')(table);
+let ANCHOR_MEMO = null;
+/** The real live-drift / frozen-drift STOP lines (anchorLines spawns 4 pre-clock children: once per file). */
+function anchors() {
+    if (ANCHOR_MEMO === null) { const A = anchorLines(); ANCHOR_MEMO = { 'live-drift': A['live-drift'], 'frozen-drift': A['frozen-drift'] }; }
+    return ANCHOR_MEMO;
+}
+
+test('C-38 lines.json: schema, the 13 children, only STOP / VOID / WARM / RESULT / RAW / WINDOW / SETTLE lines, node >= 26, provenance fields', () => {
+    const d = realDoc();
+    assert.deepEqual(Object.keys(d), ['schema', 'toolSha', 'surfaceSha', 'node', 'date', 'load1', 'busyNode', 'lockStatus', 'children']);
+    assert.equal(d.schema, 'lite-ab-gate timed-real lines v1');
+    assert.match(d.toolSha, /^[0-9a-f]{64}$/);
+    assert.match(d.surfaceSha, /^[0-9a-f]{64}$/);
+    const nm = /^v(\d+)\.\d+\.\d+$/.exec(d.node);
+    assert.ok(nm !== null && Number(nm[1]) >= 26, 'captured on node ' + d.node + ' (C-31: >= 26)');
+    assert.equal(new Date(d.date).toISOString(), d.date);
+    assert.ok(typeof d.load1 === 'number' && Number.isFinite(d.load1) && d.load1 >= 0, 'load1 ' + d.load1);
+    assert.equal(typeof d.busyNode, 'string');
+    assert.match(d.lockStatus, /^quiet-lock: held by "lite-ab-gate [^"]+" \(pid \d+, since \S+, node \S*selftest\.timed\.mjs --capture\)/, 'captured under the lock: ' + d.lockStatus);
+    assert.deepEqual(Object.keys(d.children).sort(), CHILDREN.map((c) => c.key).sort());
+    for (const c of CHILDREN) {
+        const ch = d.children[c.key];
+        assert.deepEqual(Object.keys(ch), ['inject', 'lane', 'K', 'exit', 'lines'], c.key);
+        assert.equal(ch.inject, c.inject, c.key);
+        assert.equal(ch.lane, c.lane, c.key);
+        assert.ok(Array.isArray(ch.lines) && ch.lines.length >= 1, c.key + ': no lines');
+        for (const l of ch.lines) assert.match(l, KEEP_RE, c.key);
+    }
+});
+
+test('C-38 / A2 real lines: each timed marker 1 line in its own child, CLEAN_ZERO 0 in clean, no 2-marker line; childGate clean (C-11 / C-34 / A4); the controls rejected (loosened 10/10, literals, child edits)', () => {
+    const src = readFileSync(ABGATE, 'utf8'), table = injectionsOf(src), d = realDoc();
+    const reg = /for \(const name of \[([^\]]*), null\]\) cases\.push\(\[name, l0\.id\]\);/.exec(src);
+    assert.ok(reg !== null && src.split(reg[0]).length === 2, 'the selftest injection list not found exactly once');
+    assert.deepEqual(reg[1].split(', ').map((s) => JSON.parse(s.replace(/'/g, '"'))).concat('tool-deopt'), TIMED, 'TIMED = the selftest injection list (ABGate.js) + tool-deopt');
+    assert.deepEqual(markerRealGate(table, d.children), [], 'markerRealGate on lines.json');
+    assert.deepEqual(childGate(table, d.children), [], 'childGate on lines.json');
+    const ctl = realControls(table, d.children);
+    assert.deepEqual(ctl.miss, [], 'every control rejected');
+    assert.equal(ctl.loose, TIMED.length, 'loosened prefixes rejected ' + ctl.loose + '/' + TIMED.length);
+    // the SYNTH-style table gate with each timed marker's REAL own line in place of its SYNTH line (14 / 14 markers)
+    const rendered = { ...SYNTH, ...anchors() };
+    for (const n of TIMED) rendered[n] = d.children[n + ' null'].lines.find((l) => table[n].marker.test(l));
+    assert.equal(Object.keys(rendered).length, Object.keys(table).length);
+    assert.deepEqual(markerGate(table, rendered, OTHERS), [], 'the real own lines in the marker gate');
+    // must-fail on the same real lines: the old literal bent-oracle marker also matches the real late-bend / post-bend / arr-bend STOPs
+    const bo = markerGate({ ...table, 'bent-oracle': { ...table['bent-oracle'], marker: 'STOP ORACLE' } }, rendered, OTHERS);
+    for (const n of ['late-bend', 'post-bend', 'arr-bend']) assert.ok(bo.some((s) => s.startsWith('bent-oracle: also matches ' + n + ' ')), n + '\n' + bo.join('\n'));
+    // and markerRealGate rejects the empty child set (never vacuous)
+    assert.ok(markerRealGate(table, {}).length >= CHILDREN.length);
+    assert.ok(childGate(table, {}).length >= 1);
+});
+
+test('C-38 staleness: surfaceSha(ABGate.js) equals lines.json surfaceSha, else red "re-capture via quiet-lock"; must-fail: a flipped sha, an edited marker', () => {
+    const src = readFileSync(ABGATE, 'utf8'), d = realDoc(), now = surfaceSha(src);
+    assert.equal(staleText(d.surfaceSha, now), '', staleText(d.surfaceSha, now));
+    // the sha is the documented definition, computed here independently: sha256(INJECTIONS block + '\n' + PINS joined by '\n')
+    const blockA = src.indexOf('const INJECTIONS = Object.freeze('), blockZ = src.indexOf('\n});', blockA) + 4;
+    assert.equal(injectionsBlock(src), src.slice(blockA, blockZ));
+    assert.equal(now, createHash('sha256').update(src.slice(blockA, blockZ) + '\n' + PINS.join('\n')).digest('hex'));
+    assert.equal(surfaceSha(src + '\n// a tail outside the surface\n'), now, 'text outside the block does not move the sha');
+    // must-fail controls
+    const flip = (d.surfaceSha[0] === '0' ? '1' : '0') + d.surfaceSha.slice(1);
+    assert.match(staleText(flip, now), /re-capture via quiet-lock/);
+    const edited = surfaceSha(once(src, "'boxed': { want: 2, marker: /^VOID ALLOC lane=", "'boxed': { want: 2, marker: /^VOID  ALLOC lane="));
+    assert.notEqual(edited, now);
+    assert.match(staleText(d.surfaceSha, edited), /re-capture via quiet-lock/);
+    const pinned = createHash('sha256').update(src.slice(blockA, blockZ) + '\n' + PINS.slice(1).join('\n')).digest('hex');
+    assert.notEqual(pinned, now, 'a dropped PIN moves the sha');
+});
+
+test('C-37 / C-60 G2 markerClash (sliced from ABGate.js): 0 on lines.json; every marker\'s own line joined -> ""; a built 2-marker line -> 1 clause, 2 such lines -> 2; must-fail: a ">= 3" copy', () => {
+    const src = readFileSync(ABGATE, 'utf8'), table = injectionsOf(src), d = realDoc();
+    const mc = clashOf(src, table);
+    const all = CHILDREN.flatMap((c) => d.children[c.key].lines);
+    assert.ok(all.length >= 13);
+    assert.equal(mc(all.join('\n')), '', 'lines.json');
+    // G2: ALL own lines of every marker (live count: 14) in one output -> ''
+    const own = { ...SYNTH, ...anchors() };
+    assert.equal(Object.keys(table).length, 14);
+    assert.deepEqual(Object.keys(own).sort(), Object.keys(table).sort());
+    for (const [n, l] of Object.entries(own)) assert.deepEqual(Object.keys(table).filter((m) => table[m].marker.test(l)), [n], 'own line of ' + n);
+    assert.equal(mc(Object.values(own).join('\n')), '');
+    // a built 2-marker line: JS /m also ends a line at \r, so one '\n' piece can hold two marker lines
+    const two1 = SYNTH.boxed + '\r' + SYNTH['aa-drift'], two2 = SYNTH['late-bend'] + '\r' + SYNTH['arr-bend'];
+    const c1 = mc(two1);
+    assert.equal(c1.split(' marker clash: ').length - 1, 1, c1);
+    assert.ok(c1.startsWith(' marker clash: 2 markers (boxed, aa-drift) match one line '), c1);
+    const c2 = mc([SYNTH['slow-dead'], two1, 'RESULT lane=x (gated) clean', two2].join('\n'));
+    assert.equal(c2.split(' marker clash: ').length - 1, 2, c2);
+    assert.ok(c2.includes('2 markers (boxed, aa-drift)') && c2.includes('2 markers (late-bend, arr-bend)'), c2);
+    // a loosened bent-oracle clashes on the 3 other real STOP ORACLE children of lines.json
+    const loose = clashOf(src, { ...table, 'bent-oracle': { ...table['bent-oracle'], marker: /^STOP ORACLE: /m } });
+    assert.equal(loose(all.join('\n')).split(' marker clash: ').length - 1, 3);
+    // must-fail: a copy that needs >= 3 markers never reports these clashes
+    const weak = clashOf(once(src, 'if (hit.length >= 2) desc +=', 'if (hit.length >= 3) desc +='), table);
+    assert.equal(weak(two1), '');
+    assert.equal(weak([two1, two2].join('\n')), '');
+});
+
+// C-60 G1: the timed loop of selftest(), sliced from the source and driven by stub children (no spawn, no clock)
+const X_RESULT = 'RESULT lane=x (gated) A=1.00[1.00..1.00] B=1.00[1.00..1.00] ns/op B/A=1.000[0.990..1.010] word=WITHIN B-A=0.00[0.00..0.00]ns aa=1.000[0.990..1.010] slow=2.000[1.900..2.100] ab=n/a B/AB=n/a wordAB=n/a bop=A:0.0000,B:0.0000,AA:0.0000,SLOW:0.0000 win=1 reps=A:1,B:1 spin=1 warm=1';
+const X_RAW = 'RAW lane=x B/A=1.0000,1.0000,1.0000 AA=1.0000,1.0000,1.0000 SLOW=2.0000,2.0000,2.0000';
+const X_WARM = 'WARM lane=x round 0 (discarded, not in any median) A/A=1.0000 B/A=1.0012 AA/A=1.0031 SLOW/A=2.0144';
+const X_LATE = 'STOP ORACLE: x B#0 fold (timed): got 0 want -1834221';
+const X_BOX = 'VOID ALLOC lane=x: ALLOC B 16.000 B/op';
+const TIMED_OUTS = {
+    'late-bend': { status: 1, out: ['HEADER rung=x TIMED (stub)', X_LATE, 'VERDICT NO VERDICT (STOP ORACLE) shape=[STOP ORACLE] (stub)', ''].join('\n') },
+    'boxed': { status: 2, out: [X_RESULT, X_RAW, X_WARM, X_BOX, 'VERDICT NO VERDICT (run shape) shape=[inject=boxed (want null)] (stub)', ''].join('\n') },
+    'clean': { status: 2, out: [X_RESULT, X_RAW, X_WARM, 'VERDICT NO VERDICT (run shape) shape=[rung=x (want ALL); K=3 (want 11)] (stub)', ''].join('\n') },
+};
+const stubChild = (outs) => (ctx, args, env) => {
+    const o = outs[env.inject === null ? 'clean' : env.inject];
+    const vs = o.out.split('\n').filter((l) => l.startsWith('VERDICT '));
+    return { status: o.status, out: o.out, vline: vs.length === 1 ? vs[0] : null, nV: vs.length };
+};
+/** -> { rows: [{ ok, txt }], log } of the sliced timed loop over TIMED_OUTS (cases late-bend, boxed, clean on lane x). */
+function timedLoop(src, table) {
+    const body = between(src, '    for (const [name, lane] of cases) {\n', '    if (l0 === undefined) { bad++;');
+    const h = new Function(between(src, 'const NUM_RE = ', '\nconst fin3 = ') + '\n' + between(src, 'function field(line, key) {', '\nfunction stat3(') + '\nreturn { num, field };')();
+    const aaHi = Number(/^export const AA_HI = ([0-9.]+);$/m.exec(src)[1]);
+    const ctx = { jspec: { K: 11 }, log: [] }, rows = [];
+    const cases = Object.keys(TIMED_OUTS).map((k) => [k === 'clean' ? null : k, 'x']);
+    new Function('ctx', 'lanes', 'cases', 'INJECTIONS', 'child', 'envWith', 'field', 'num', 'AA_HI', 'markerClash', 'row', 'say', body)(
+        ctx, [{ id: 'x' }], cases, table, stubChild(TIMED_OUTS), (n) => ({ inject: n }), h.field, h.num, aaHi, clashOf(src, table),
+        (ok, txt) => { rows.push({ ok, txt }); }, (c, s) => { c.log.push(s); });
+    return { rows, log: ctx.log };
+}
+const LOOSE_T = (table) => ({ ...table, 'bent-oracle': { ...table['bent-oracle'], marker: /^STOP ORACLE: /m }, 'slow-dead': { ...table['slow-dead'], marker: /^VOID /m } });
+
+test('C-60 G1 timed loop (sliced): a loosened table fails the late-bend / boxed rows on the markerClash fold; passing rows replay RESULT / STOP / WARM / VOID; must-fail: no-fold copy, pre-U8 replay regex', () => {
+    const src = readFileSync(ABGATE, 'utf8'), table = injectionsOf(src);
+    const real = timedLoop(src, table);
+    assert.deepEqual(real.rows.map((r) => r.ok), [true, true, true], real.rows.map((r) => r.txt).join('\n'));
+    assert.deepEqual(real.log, ['SELFTEST   ' + X_LATE, 'SELFTEST   ' + X_RESULT, 'SELFTEST   ' + X_WARM, 'SELFTEST   ' + X_BOX, 'SELFTEST   ' + X_RESULT, 'SELFTEST   ' + X_WARM]);
+    const lo = timedLoop(src, LOOSE_T(table));
+    assert.deepEqual(lo.rows.map((r) => r.ok), [false, false, true], lo.rows.map((r) => r.txt).join('\n'));
+    assert.ok(lo.rows[0].txt.includes(' marker clash: 2 markers (bent-oracle, late-bend) match one line ' + JSON.stringify(X_LATE) + ';'), lo.rows[0].txt);
+    assert.ok(lo.rows[1].txt.includes(' marker clash: 2 markers (boxed, slow-dead) match one line ' + JSON.stringify(X_BOX) + ';'), lo.rows[1].txt);
+    assert.deepEqual(lo.log, ['SELFTEST   ' + X_RESULT, 'SELFTEST   ' + X_WARM], 'a FAIL row replays nothing on this path');
+    // must-fail 1: the fold removed -> the loosened table passes both rows (this gate would read red)
+    const nf = timedLoop(once(src, "        if (clash !== '') extra += clash + ';';\n", ''), LOOSE_T(table));
+    assert.deepEqual(nf.rows.map((r) => r.ok), [true, true, true], 'the no-fold copy must pass the loosened rows');
+    // must-fail 2: the pre-U8 replay regex (no VOID) -> the passing boxed row's VOID line is not replayed
+    const nv = timedLoop(once(src, 'if (/^(RESULT|STOP|WARM|VOID) /.test(l))', 'if (/^(RESULT|STOP|WARM) /.test(l))'), table);
+    assert.deepEqual(nv.rows.map((r) => r.ok), [true, true, true]);
+    assert.ok(!nv.log.includes('SELFTEST   ' + X_BOX) && real.log.includes('SELFTEST   ' + X_BOX));
+});
+
+// C-58: the untimed live-drift / frozen-drift rows' markerClash fold, sliced the same way
+const U_LIVE = 'STOP ANCHOR: live-drift live/k.js differs from the frozen frozen/k.js at char 101 (live 300 vs frozen 300 chars)';
+const U_FROZEN = 'STOP ANCHOR: frozen-sha frozen/k.js sha256 12345678 (want 2a83d841)';
+const UNTIMED_OUTS = {
+    'live-drift': { status: 1, out: [U_LIVE, 'VERDICT NO VERDICT (STOP ANCHOR) shape=[STOP ANCHOR] (stub)', ''].join('\n') },
+    'frozen-drift': { status: 1, out: [U_FROZEN, 'VERDICT NO VERDICT (STOP ANCHOR) shape=[STOP ANCHOR] (stub)', ''].join('\n') },
+};
+/** -> [{ ok, txt }] of the sliced untimed sections (4) live-drift and (5) frozen-drift, on a live-bound stub spec. */
+function untimedFold(src, table) {
+    const body = between(src, '    // (4) live-drift, pre-clock.', '    // (6) the judge rows');
+    const preClock = new Function(between(src, 'const preClock = ', '\nconst JUDGE_ROWS') + '\nreturn preClock;')();
+    const tail = new Function(between(src, 'const FROZEN_ONLY_TAIL = ', '\n') + '\nreturn FROZEN_ONLY_TAIL;')();
+    const ctx = { spec: { frozen: [{ name: 'k.js', frozen: 'frozen/k.js', sha256: '2a83d841' + '0'.repeat(56), live: 'live/k.js' }] }, log: [] }, rows = [];
+    new Function('ctx', 'INJECTIONS', 'child', 'envWith', 'runId', 'preClock', 'markerClash', 'row', 'FROZEN_ONLY_TAIL', body)(
+        ctx, table, stubChild(UNTIMED_OUTS), (n) => ({ inject: n }), 'x', preClock, clashOf(src, table), (ok, txt) => { rows.push({ ok, txt }); }, tail);
+    return rows;
+}
+const LOOSE_U = (table) => ({ ...table, 'live-drift': { ...table['live-drift'], marker: /^STOP ANCHOR: /m }, 'frozen-drift': { ...table['frozen-drift'], marker: /^STOP ANCHOR: /m } });
+
+test('C-58 untimed fold (sliced): a loosened table fails the live-drift and frozen-drift rows on markerClash; must-fail: each row\'s no-fold copy passes its own row only', () => {
+    const src = readFileSync(ABGATE, 'utf8'), table = injectionsOf(src);
+    const real = untimedFold(src, table);
+    assert.deepEqual(real.map((r) => r.ok), [true, true], real.map((r) => r.txt).join('\n'));
+    assert.ok(real[0].txt.startsWith('live-drift x: exit 1 (want 1) marker ') && real[1].txt.startsWith('frozen-drift frozen/k.js: exit 1 (want 1) marker '));
+    const lo = untimedFold(src, LOOSE_U(table));
+    assert.deepEqual(lo.map((r) => r.ok), [false, false], lo.map((r) => r.txt).join('\n'));
+    assert.ok(lo[0].txt.includes(' marker clash: 2 markers (live-drift, frozen-drift) match one line ' + JSON.stringify(U_LIVE) + ';'), lo[0].txt);
+    assert.ok(lo[1].txt.includes(' marker clash: 2 markers (live-drift, frozen-drift) match one line ' + JSON.stringify(U_FROZEN) + ';'), lo[1].txt);
+    const nfL = untimedFold(once(src, "const clash = markerClash(r.out), extra = clash === '' ? '' : clash + ';';", "const clash = '', extra = '';"), LOOSE_U(table));
+    assert.deepEqual(nfL.map((r) => r.ok), [true, false], 'the live-drift no-fold copy passes its row only');
+    const nfF = untimedFold(once(src, "const fdClash = markerClash(fd.out), fdExtra = fdClash === '' ? '' : fdClash + ';';", "const fdClash = '', fdExtra = '';"), LOOSE_U(table));
+    assert.deepEqual(nfF.map((r) => r.ok), [false, true], 'the frozen-drift no-fold copy passes its row only');
 });
 
 // ============================================================ CLI: --selftest-untimed takes no other flag

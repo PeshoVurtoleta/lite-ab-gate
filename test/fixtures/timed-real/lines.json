@@ -1,0 +1,170 @@
+{
+  "schema": "lite-ab-gate timed-real lines v1",
+  "toolSha": "1a280a18b914e05f8501a05d6982fd0b411870768835a2229cc7bbef4dd2bb4c",
+  "surfaceSha": "15eb588f8179c7f6509e20622921b63129fbc2cd9abd0c2edf450dea7d6df5b3",
+  "node": "v26.8.2",
+  "date": "2026-11-26T03:41:32.030Z",
+  "load1": 2.38,
+  "busyNode": "",
+  "lockStatus": "quiet-lock: held by \"lite-ab-gate U8B2 capture\" (pid 98053, since 2026-11-26T03:41:31.926Z, node test/selftest.timed.mjs --capture) | host QUIET (load1 2.38, baseline 2.21, 12 cores)",
+  "children": {
+    "bent-oracle null": {
+      "inject": "bent-oracle",
+      "lane": "null",
+      "K": 3,
+      "exit": 1,
+      "lines": [
+        "STOP ORACLE: null B#0 (after the oracle pass) op 0 field 0 got -826361609 want 826361609"
+      ]
+    },
+    "boxed null": {
+      "inject": "boxed",
+      "lane": "null",
+      "K": 3,
+      "exit": 2,
+      "lines": [
+        "SETTLE lane=null passes=3 pass-bytes=100663296,100663296,100663296 settled=no",
+        "WINDOW lane=null tool-bytes=100663312 scavenges=24",
+        "RESULT lane=null (gated) A=4.09[4.02..4.12] B=8.37[8.29..8.39] ns/op B/A=2.056[2.035..2.066] word=SLOWER B-A=4.26[4.24..4.29]ns aa=1.032[1.004..1.037] slow=3.037[3.008..3.062] ab=n/a B/AB=n/a wordAB=n/a bop=A:0.0000,AA:0.0000,SLOW:0.0000,B:Infinity win=2048 reps=A:256,B:256 spin=32 warm=1 VOID=[TIER-SETTLE pass-bytes 100663296,100663296,100663296 (cap 3, none read exactly 0); ALLOC B Infinity B/op]",
+        "RAW lane=null B/A=2.0766,2.0559,2.0132 AA=1.0318,1.0424,0.9760 SLOW=3.0867,3.0369,2.9787",
+        "WARM lane=null round 0 (discarded, not in any median) A/A=1.0000 B/A=1.9143 AA/A=0.9588 SLOW/A=2.9667",
+        "VOID TIER-SETTLE lane=null: TIER-SETTLE pass-bytes 100663296,100663296,100663296 (cap 3, none read exactly 0)",
+        "VOID ALLOC lane=null: ALLOC B Infinity B/op"
+      ]
+    },
+    "slow-dead null": {
+      "inject": "slow-dead",
+      "lane": "null",
+      "K": 3,
+      "exit": 2,
+      "lines": [
+        "SETTLE lane=null passes=1 pass-bytes=0 settled=yes",
+        "WINDOW lane=null tool-bytes=0 scavenges=0",
+        "RESULT lane=null (gated) A=4.09[4.08..4.11] B=4.07[4.07..4.10] ns/op B/A=0.997[0.991..1.004] word=WITHIN B-A=-0.01[-0.04..0.02]ns aa=0.997[0.991..0.999] slow=0.982[0.966..0.988] ab=n/a B/AB=n/a wordAB=n/a bop=A:0.0000,AA:0.0000,SLOW:0.0000,B:0.0000 win=2048 reps=A:256,B:256 spin=32 warm=1 VOID=[SLOW-DEAD 0.982[0.966..0.988]]",
+        "RAW lane=null B/A=0.9843,0.9973,1.0112 AA=0.9845,1.0004,0.9971 SLOW=0.9824,0.9505,0.9944",
+        "WARM lane=null round 0 (discarded, not in any median) A/A=1.0000 B/A=1.0941 AA/A=1.0721 SLOW/A=1.0825",
+        "VOID SLOW-DEAD lane=null: SLOW-DEAD 0.982[0.966..0.988]"
+      ]
+    },
+    "aa-drift null": {
+      "inject": "aa-drift",
+      "lane": "null",
+      "K": 3,
+      "exit": 2,
+      "lines": [
+        "SETTLE lane=null passes=1 pass-bytes=0 settled=yes",
+        "WINDOW lane=null tool-bytes=0 scavenges=0",
+        "RESULT lane=null (gated) A=4.27[4.23..4.31] B=4.24[4.20..4.27] ns/op B/A=0.993[0.975..1.008] word=WITHIN B-A=-0.03[-0.11..0.03]ns aa=3.040[3.015..3.085] slow=2.911[2.899..2.948] ab=n/a B/AB=n/a wordAB=n/a bop=A:0.0000,AA:0.0000,SLOW:0.0000,B:0.0000 win=2048 reps=A:256,B:256 spin=32 warm=1 VOID=[AA-DRIFT 3.040[3.015..3.085]]",
+        "RAW lane=null B/A=0.9572,1.0229,0.9927 AA=2.9896,3.1311,3.0397 SLOW=2.8872,2.9862,2.9108",
+        "WARM lane=null round 0 (discarded, not in any median) A/A=1.0000 B/A=1.0074 AA/A=3.0494 SLOW/A=3.2514",
+        "VOID AA-DRIFT lane=null: AA-DRIFT 3.040[3.015..3.085]"
+      ]
+    },
+    "late-bend null": {
+      "inject": "late-bend",
+      "lane": "null",
+      "K": 3,
+      "exit": 1,
+      "lines": [
+        "SETTLE lane=null passes=1 pass-bytes=0 settled=yes",
+        "STOP ORACLE: null B#0 fold (timed): got -610271232 want 1907536896"
+      ]
+    },
+    "post-bend null": {
+      "inject": "post-bend",
+      "lane": "null",
+      "K": 3,
+      "exit": 1,
+      "lines": [
+        "SETTLE lane=null passes=1 pass-bytes=0 settled=yes",
+        "WINDOW lane=null tool-bytes=0 scavenges=0",
+        "STOP ORACLE: null B#0 (after timing, fresh reference) op 0 field 0 got 1453840686 want 826361609"
+      ]
+    },
+    "ab-drift null": {
+      "inject": "ab-drift",
+      "lane": "null",
+      "K": 3,
+      "exit": 2,
+      "lines": [
+        "SETTLE lane=null passes=1 pass-bytes=0 settled=yes",
+        "WINDOW lane=null tool-bytes=0 scavenges=0",
+        "RESULT lane=null (gated) A=4.06[4.04..4.08] B=4.10[4.08..4.10] ns/op B/A=1.003[1.002..1.011] word=WITHIN B-A=0.01[0.01..0.04]ns aa=1.006[1.005..1.010] slow=3.076[3.073..3.091] ab=144.470[143.644..145.374] B/AB=0.007[0.007..0.007] wordAB=FASTER bop=A:0.0000,AA:0.0000,SLOW:0.0000,B:0.0000,AB:0.0000 win=2048 reps=A:256,B:128,AB:128 spin=32 warm=1 VOID=[REPS-DRIFT B/AB 0.007[0.007..0.007] reads FASTER but B/A 1.003[1.002..1.011] reads WITHIN (AB = A at B's reps 128 vs A's 256)]",
+        "RAW lane=null B/A=1.0185,1.0026,1.0005 AA=1.0063,1.0031,1.0140 SLOW=3.1061,3.0695,3.0755 AB=146.2771,144.4700,142.8172",
+        "WARM lane=null round 0 (discarded, not in any median) A/A=1.0000 B/A=0.9481 AA/A=0.9550 SLOW/A=3.2901 AB/A=135.2765",
+        "VOID REPS-DRIFT lane=null: REPS-DRIFT B/AB 0.007[0.007..0.007] reads FASTER but B/A 1.003[1.002..1.011] reads WITHIN (AB = A at B's reps 128 vs A's 256)"
+      ]
+    },
+    "warm-skew null": {
+      "inject": "warm-skew",
+      "lane": "null",
+      "K": 3,
+      "exit": 2,
+      "lines": [
+        "SETTLE lane=null passes=1 pass-bytes=0 settled=yes",
+        "WINDOW lane=null tool-bytes=0 scavenges=0",
+        "RESULT lane=null (gated) A=4.42[4.42..4.50] B=4.43[4.42..4.43] ns/op B/A=0.997[0.982..1.000] word=WITHIN B-A=-0.01[-0.08..-0.00]ns aa=0.995[0.978..1.002] slow=2.842[2.794..2.848] ab=n/a B/AB=n/a wordAB=n/a bop=A:0.0000,AA:0.0000,SLOW:0.0000,B:0.0000 win=2048 reps=A:256,B:256 spin=32 warm=1",
+        "RAW lane=null B/A=0.9671,1.0024,0.9969 AA=0.9604,0.9949,1.0085 SLOW=2.7446,2.8533,2.8425",
+        "WARM lane=null round 0 (discarded, not in any median) A/A=1.0000 B/A=0.9905 AA/A=4.8929 SLOW/A=2.7567"
+      ]
+    },
+    "arr-bend null": {
+      "inject": "arr-bend",
+      "lane": "null",
+      "K": 3,
+      "exit": 1,
+      "lines": [
+        "STOP ORACLE: null B#0 data.x (after warm) differs from the lane data at byte 131071"
+      ]
+    },
+    "tool-deopt null": {
+      "inject": "tool-deopt",
+      "lane": "null",
+      "K": 3,
+      "exit": 2,
+      "lines": [
+        "SETTLE lane=null passes=1 pass-bytes=0 settled=yes",
+        "WINDOW lane=null tool-bytes=12288 scavenges=0",
+        "RESULT lane=null (gated) A=4.07[4.07..4.08] B=4.07[4.07..4.11] ns/op B/A=1.000[1.000..1.008] word=WITHIN B-A=0.00[0.00..0.03]ns aa=1.000[0.993..1.006] slow=3.061[3.053..3.072] ab=n/a B/AB=n/a wordAB=n/a bop=A:0.0000,AA:0.0000,SLOW:0.0000,B:0.0000 win=2048 reps=A:256,B:256 spin=32 warm=1 VOID=[NOT-TF tool timedRounds (TF at window start true, end false)]",
+        "RAW lane=null B/A=1.0002,1.0162,1.0004 AA=1.0004,1.0108,0.9865 SLOW=3.0837,3.0607,3.0450",
+        "WARM lane=null round 0 (discarded, not in any median) A/A=1.0000 B/A=1.0570 AA/A=1.0464 SLOW/A=3.2911",
+        "VOID NOT-TF lane=null: NOT-TF tool timedRounds (TF at window start true, end false)"
+      ]
+    },
+    "bent-oracle double": {
+      "inject": "bent-oracle",
+      "lane": "double",
+      "K": 3,
+      "exit": 1,
+      "lines": [
+        "STOP ORACLE: double B#2 (after the oracle pass) op 0 field 0 got 1591815685 want 826361609"
+      ]
+    },
+    "clean null": {
+      "inject": null,
+      "lane": "null",
+      "K": 3,
+      "exit": 2,
+      "lines": [
+        "SETTLE lane=null passes=1 pass-bytes=0 settled=yes",
+        "WINDOW lane=null tool-bytes=0 scavenges=0",
+        "RESULT lane=null (gated) A=4.10[4.05..4.11] B=4.07[4.06..4.09] ns/op B/A=0.999[0.995..1.006] word=WITHIN B-A=-0.01[-0.02..0.03]ns aa=1.000[0.998..1.006] slow=3.107[3.064..3.110] ab=n/a B/AB=n/a wordAB=n/a bop=A:0.0000,AA:0.0000,SLOW:0.0000,B:0.0000 win=2048 reps=A:256,B:256 spin=32 warm=1",
+        "RAW lane=null B/A=1.0141,0.9916,0.9986 AA=1.0128,0.9965,1.0000 SLOW=3.1128,3.0198,3.1072",
+        "WARM lane=null round 0 (discarded, not in any median) A/A=1.0000 B/A=0.9772 AA/A=0.9434 SLOW/A=3.0818"
+      ]
+    },
+    "clean double": {
+      "inject": null,
+      "lane": "double",
+      "K": 3,
+      "exit": 2,
+      "lines": [
+        "SETTLE lane=double passes=1 pass-bytes=0 settled=yes",
+        "WINDOW lane=double tool-bytes=0 scavenges=0",
+        "RESULT lane=double (gated) A=4.07[4.07..4.08] B=6.93[6.91..6.94] ns/op B/A=1.702[1.694..1.706] word=SLOWER B-A=2.86[2.83..2.87]ns aa=1.000[0.997..1.007] slow=3.023[3.023..3.043] ab=n/a B/AB=n/a wordAB=n/a bop=AA:0.0000,A:0.0000,B:0.0000,SLOW:0.0000 win=2048 reps=A:256,B:256 spin=32 warm=1",
+        "RAW lane=double B/A=1.7024,1.6857,1.7093 AA=1.0002,0.9939,1.0141 SLOW=3.0234,3.0624,3.0224",
+        "WARM lane=double round 0 (discarded, not in any median) A/A=1.0000 B/A=1.6381 AA/A=0.8558 SLOW/A=2.6788"
+      ]
+    }
+  }
+}

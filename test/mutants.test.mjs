@@ -22,7 +22,7 @@ const SRC = readFileSync(join(ROOT, 'ABGate.js'), 'utf8');
 const DOC = JSON.parse(readFileSync(join(ROOT, 'test', 'mutants.json'), 'utf8'));
 const M = DOC.mutants;
 const ALLOWED = ['test/parity.abgate.test.mjs', 'test/judge.rows.test.mjs', 'test/judge.extra.test.mjs', 'test/selftest.untimed.test.mjs', 'test/settle.test.mjs', 'test/hotbody.parity.test.mjs'];
-const FIXTURES = ['ab-gate-7e0f9262', 'judge-lane', 'reproof', 'hotbody'];   // reproof: judge.extra's real-log row (U5c review r1); hotbody: the A1 golden (U9E)
+const FIXTURES = ['ab-gate-7e0f9262', 'judge-lane', 'reproof', 'hotbody', 'timed-real'];   // reproof: judge.extra's real-log row (U5c review r1); hotbody: the A1 golden (U9E); timed-real: selftest.untimed's C-38 lines.json + surface.mjs (U8 B2)
 // plan-GB A3: 29 = 10 r0 FLIPS + 8 C-11 + 3 C-12 + 6 HEADER/PROV + the belt + a dialect leak; then the U5 reviewer
 // survivors (M14, M16, M17 x2, R2 x2) and the U6 runner check M2 (killer: selftest.untimed); C-34 (U5b, + the 2
 // twice-printed AB mutants of review r1 blocker 2) and C-42 (U5b retry: RESULT reps unparsed / printed twice, any lane);
