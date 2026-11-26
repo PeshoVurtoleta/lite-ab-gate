@@ -1,7 +1,9 @@
 // docs.template.test.mjs -- the workflow template drift guard (plan-GC TASK 6, ASSERTION 1; C-7, C-14, C-17, C-24, C-31;
 // plan-U8 TASK 5: the selftest STOP gate requires timed >= 1, and the summary names a red selftest NO VERDICT;
 // FILL7 / C-57 STEPKEYS: every step of every checked job has its exact key set, plain or quoted, in failclosed;
-// FILL8 / C-63 CIJOBKEYS: ci.yml's jobs are exactly `test`, with its exact key set and runs-on, in failclosed).
+// FILL8 / C-63 CIJOBKEYS: ci.yml's jobs are exactly `test`, with its exact key set and runs-on, in failclosed;
+// FILL9 / C-64 CITOPKEYS: ci.yml's top-level keys are exactly name, on, permissions, concurrency, defaults, jobs and its
+// defaults block is byte-exact, in failclosed).
 // DETERMINISTIC: reads templates/ab.yml, .github/workflows/ab.yml, .github/workflows/ci.yml and examples/ as TEXT
 // (zero deps: YAML parsed as lines) and checks them against ABGate.js's REQUIRED_FLAGS and EXIT. Teeth: every check also
 // runs on in-memory mutants of the real files; on each mutant exactly its own check must fail and every other check
@@ -218,6 +220,37 @@ function ciJobProblems(t) {
     return p;
 }
 const isCiJobProblem = (s) => / cijob /.test(s);
+// C-64 CITOPKEYS (extends C-52 / C-63): ci.yml's top-level keys are exactly TOP_KEYS_CI (read at indent 0, plain or quoted,
+// sorted compare, duplicates kept; C-64 names the set, not an order, so the set is pinned and the order is not) and its
+// `defaults:` block is byte-exact DEFAULTS_CI (the block runs to the first non-blank, non-comment col-0 line, as YAML
+// does: col-0 comments inside it are skipped, so a key after one still belongs to it; trailing blank / comment lines are
+// not part of it). No top-level env is therefore possible. Literal, never derived.
+const TOP_KEYS_CI = Object.freeze(['concurrency', 'defaults', 'jobs', 'name', 'on', 'permissions']);
+const DEFAULTS_CI = 'defaults:\n  run:\n    shell: bash';
+function ciTopProblems(t) {
+    const ls = linesOf(t), p = [], tag = '.github/workflows/ci.yml: citop ', keys = [];
+    for (let j = 0; j < ls.length; j++) {
+        const l = ls[j], where = tag + 'line ' + (j + 1) + ': ';
+        if (/[^\x20-\x7e]/.test(l)) { p.push(where + 'char outside printable ASCII'); continue; }
+        if (l.trim() === '' || l.trim().startsWith('#')) continue;
+        if (l.split(/[[{]/).length !== l.split(/[\]}]/).length || (l.split('"').length & 1) === 0 || (l.split("'").length & 1) === 0) { p.push(where + 'unbalanced flow bracket or quote'); continue; }
+        if (indentOf(l) !== 0) continue;   // a nested value or a block-scalar body, not a top-level key
+        const k = STEP_KEY_RE.exec(l);
+        if (k === null) { p.push(where + 'key does not parse: ' + JSON.stringify(l)); continue; }
+        keys.push(stepKeyName(k));
+    }
+    const got = keys.slice().sort();
+    if (got.join(',') !== TOP_KEYS_CI.join(',')) p.push(tag + 'keys ' + JSON.stringify(got) + ' (want ' + TOP_KEYS_CI.join(',') + ')');
+    const at = ls.map((l, i) => (l === 'defaults:' ? i : -1)).filter((i) => i >= 0);
+    if (at.length !== 1) return [...p, tag + 'defaults ' + at.length + ' exact "defaults:" lines (want 1)'];
+    let e = at[0] + 1;
+    while (e < ls.length && (ls[e].trim() === '' || ls[e].startsWith('#') || indentOf(ls[e]) > 0)) e++;
+    while (e > at[0] + 1 && (ls[e - 1].trim() === '' || ls[e - 1].startsWith('#'))) e--;
+    const blk = ls.slice(at[0], e).join('\n').replace(/\n+$/, '').replace(/(?:\n[ ]*)+$/, '');
+    if (blk !== DEFAULTS_CI) p.push(tag + 'defaults block ' + JSON.stringify(blk) + ' (want ' + JSON.stringify(DEFAULTS_CI) + ')');
+    return p;
+}
+const isCiTopProblem = (s) => / citop /.test(s);
 // C-57 STEPKEYS (P99): every step of the checked job, in order, by name, with its exact top-level key set (sorted compare,
 // duplicates kept). Keys are read at the step's own indentation, plain or quoted ("k": / 'k': normalize to k), so a quoted
 // continue-on-error / shell / if cannot slip past the unquoted regex rows. Literal per step, never derived from the file.
@@ -537,6 +570,8 @@ const CHECKS = {
         // C-63 CIJOBKEYS: ci.yml's job set, job key set and runs-on (folded here, not in ci: an unquoted job-level if: /
         // continue-on-error already fails the if-outside-a-step / continue-on-error rows above, so a ci-check row would fail twice)
         p.push(...ciJobProblems(w.ci));
+        // C-64 CITOPKEYS: ci.yml's top-level key set and byte-exact defaults block (folded here for the same reason)
+        p.push(...ciTopProblems(w.ci));
         for (const [f, t] of WFS(w)) {
             const st = stepsOf(t);
             const si = st.findIndex((s) => s.name === 'selftest'), gi = st.findIndex((s) => s.name === GATE_STEP);
@@ -635,6 +670,7 @@ function mutant(where, from, to) {
         return m;
     };
 }
+const CI_DEF = 'defaults:\n  run:\n    shell: bash\n';   // ci.yml's defaults block (C-64 mutant anchor; in ci.yml exactly once)
 const CI_RO = RUNS_ON_LINE + '\n';   // ci.yml's job-level runs-on line (C-63 mutant anchor; in ci.yml exactly once)
 const MUTANTS = [
     // ASSERTION 1's six
@@ -741,6 +777,18 @@ const MUTANTS = [
     ['M84 (C-63) double-quoted runs-on key, self-hosted', 'failclosed', mutant('ci', CI_RO, '    "runs-on": self-hosted\n')],
     ['M85 (C-63) explicit-key job-level continue-on-error on ci test', 'failclosed', mutant('ci', CI_RO, CI_RO + '    ? continue-on-error\n    : true\n')],
     ['M86 (C-63) CR hides a quoted job-level continue-on-error', 'failclosed', mutant('ci', '    timeout-minutes: 30\n', '    timeout-minutes: 30\r    "continue-on-error": true\n')],
+    // FILL9 (C-64 CITOPKEYS): ci.yml's top level; each caught by the citop row alone (M87 is the C-64 named env mutant,
+    // M88 the named quoted-shell mutant); controls below pin which compare (key set / defaults block) owns each
+    ['M87 (C-64) top-level env: NODE_OPTIONS: --test-only on ci', 'failclosed', mutant('ci', CI_DEF, 'env:\n  NODE_OPTIONS: --test-only\n\n' + CI_DEF)],
+    ['M88 (C-64) defaults shell replaced by quoted "shell": bash -c true {0}', 'failclosed', mutant('ci', '    shell: bash\n', '    "shell": bash -c true {0}\n')],
+    ['M89 (C-64) top-level key dropped (permissions)', 'failclosed', mutant('ci', 'permissions:\n  contents: read\n\n', '')],
+    ['M90 (C-64) quoted top-level "env" key', 'failclosed', mutant('ci', CI_DEF, '"env":\n  NODE_OPTIONS: --test-only\n\n' + CI_DEF)],
+    ['M91 (C-64) duplicate top-level key (permissions twice)', 'failclosed', mutant('ci', CI_DEF, 'permissions:\n  contents: write\n\n' + CI_DEF)],
+    ['M92 (C-64) defaults gains a working-directory line', 'failclosed', mutant('ci', '    shell: bash\n', '    shell: bash\n    working-directory: /\n')],
+    ['M93 (C-64) trailing space after defaults run:', 'failclosed', mutant('ci', '  run:\n    shell: bash\n', '  run: \n    shell: bash\n')],
+    ['M94 (C-64) explicit-key top-level env on ci (? env)', 'failclosed', mutant('ci', CI_DEF, '? env\n: { NODE_OPTIONS: --test-only }\n\n' + CI_DEF)],
+    ['M95 (C-64) col-0 comment hides a defaults working-directory', 'failclosed', mutant('ci', CI_DEF, CI_DEF + '# c\n    working-directory: /\n')],
+    ['M96 (C-64) permissions moved into an open flow sequence', 'failclosed', mutant('ci', "    branches: ['**']\n  pull_request:\n  workflow_dispatch:\n\npermissions:\n  contents: read\n", "    branches: ['**',\npermissions:\n  {contents: write}]\n  pull_request:\n  workflow_dispatch:\n")],
 ];
 
 // ---------------------------------------------------------------- tests
@@ -873,7 +921,8 @@ test('control (C-63): the unmutated ci.yml gives no cijob problem; M72..M86 are 
         const p = CHECKS.failclosed(mk(WORLD, what));
         assert.ok(p.some(isCiJobProblem), what + ': cijob row silent');
         // the unquoted job-level if: is the one form an older row already saw; every quoted / key-set form is the cijob row's alone
-        const others = p.filter((s) => !isCiJobProblem(s));
+        // M86's CR is a char outside printable ASCII for the C-64 citop row too (same check, same line): not another row's gap
+        const others = p.filter((s) => !isCiJobProblem(s) && !(what.startsWith('M86 ') && isCiTopProblem(s)));
         if (what.startsWith('M75 ')) assert.deepEqual(others, ['.github/workflows/ci.yml: 1 if: outside a step'], what);
         else assert.deepEqual(others, [], what + ': another failclosed row also fires (not a gap probe)');
     }
@@ -894,6 +943,31 @@ test('control (C-63): each compare (jobs set / key set / runs-on) has mutants th
     assert.deepEqual(ciJobProblems(WORLD.ci + 'jobs:\n'), ['.github/workflows/ci.yml: cijob 2 "jobs:" lines (want 1)'], 'a second jobs: line');
     assert.deepEqual(ciJobProblems(WORLD.ci.replace('  test:\n', '  test: { }\n')).map(cmp), ['other'], 'flow-style job value');
     assert.deepEqual(ciJobProblems(WORLD.ci.replace('    runs-on:', '   runs-on:')).map(cmp), ['other', 'keys', 'runs-on'], 'indent-3 key');
+});
+test('control (C-64): the unmutated ci.yml gives no citop problem; M87..M96 are caught by the citop row alone', () => {
+    assert.deepEqual(ciTopProblems(WORLD.ci), []);
+    const sel = MUTANTS.filter((m) => /^M(8[7-9]|9[0-6]) /.test(m[0]));
+    assert.equal(sel.length, 10);
+    for (const [what, , mk] of sel) {
+        const p = CHECKS.failclosed(mk(WORLD, what));
+        assert.ok(p.some(isCiTopProblem), what + ': citop row silent');
+        assert.deepEqual(p.filter((s) => !isCiTopProblem(s)), [], what + ': another failclosed row also fires (not a gap probe)');
+    }
+});
+test('control (C-64): each compare (key set / defaults block) has mutants that it alone catches; quoted keys normalize; order is not pinned', () => {
+    const cmp = (s) => (/ citop keys /.test(s) ? 'keys' : / citop defaults block /.test(s) ? 'block' : 'other');
+    const want = { M87: ['keys'], M88: ['block'], M89: ['keys'], M90: ['keys'], M91: ['keys'], M92: ['block'], M93: ['block'], M94: ['other', 'other'], M95: ['block'], M96: ['other', 'other'] };
+    for (const [what, , mk] of MUTANTS.filter((m) => Object.hasOwn(want, m[0].split(' ')[0]))) {
+        assert.deepEqual(ciTopProblems(mk(WORLD, what).ci).map(cmp), want[what.split(' ')[0]], what);
+    }
+    assert.deepEqual(ciTopProblems(WORLD.ci.replace('\nname: ci\n', '\n"name": ci\n').replace('\nconcurrency:', "\n'concurrency':")), [], 'quoted allowed keys normalize');
+    assert.deepEqual(ciTopProblems(WORLD.ci.replace('\ndefaults:', '\n"defaults":')).map(cmp), ['other'], 'quoted defaults key: exact defaults: line gone');
+    assert.deepEqual(ciTopProblems(WORLD.ci.replace('defaults:\n  run:\n    shell: bash\n\n', 'defaults:\n  run:\n    shell: bash\n# c\n\n')), [], 'col-0 comment after the block ends it');
+    assert.deepEqual(ciTopProblems(WORLD.ci.replace('defaults:\n  run:\n    shell: bash\n', 'defaults:\n  run:\n    # c\n    shell: bash\n')).map(cmp), ['block'], 'indented comment inside the block is not byte-exact');
+    assert.deepEqual(ciTopProblems(WORLD.ci.replace('jobs:\n', 'jobs:\n\r')).map(cmp).includes('other'), true, 'CR fails closed');
+    assert.deepEqual(ciTopProblems(WORLD.ci + 'defaults:\n').map(cmp), ['keys', 'other'], 'a second defaults: line');
+    // order is not pinned (C-64 names the set only): jobs-before-name still passes the set compare
+    assert.deepEqual(ciTopProblems('permissions:\n  contents: read\nname: ci\non:\n  push:\n\n' + CI_DEF + 'concurrency:\n  group: g\njobs:\n  test:\n'), []);
 });
 test('the real files are untouched by the mutants (in-memory only)', () => {
     assert.deepEqual(loadWorld(), WORLD);
