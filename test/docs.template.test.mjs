@@ -1,6 +1,7 @@
 // docs.template.test.mjs -- the workflow template drift guard (plan-GC TASK 6, ASSERTION 1; C-7, C-14, C-17, C-24, C-31;
 // plan-U8 TASK 5: the selftest STOP gate requires timed >= 1, and the summary names a red selftest NO VERDICT;
-// FILL7 / C-57 STEPKEYS: every step of every checked job has its exact key set, plain or quoted, in failclosed).
+// FILL7 / C-57 STEPKEYS: every step of every checked job has its exact key set, plain or quoted, in failclosed;
+// FILL8 / C-63 CIJOBKEYS: ci.yml's jobs are exactly `test`, with its exact key set and runs-on, in failclosed).
 // DETERMINISTIC: reads templates/ab.yml, .github/workflows/ab.yml, .github/workflows/ci.yml and examples/ as TEXT
 // (zero deps: YAML parsed as lines) and checks them against ABGate.js's REQUIRED_FLAGS and EXIT. Teeth: every check also
 // runs on in-memory mutants of the real files; on each mutant exactly its own check must fail and every other check
@@ -178,6 +179,45 @@ function jobKeyProblems(f, t) {
     if (keys.slice().sort().join(',') !== JOB_KEYS.join(',')) p.push(f + ': job ab keys ' + JSON.stringify(keys) + ' (want ' + JOB_KEYS.join(',') + ')');
     return p;
 }
+// C-63 CIJOBKEYS (extends C-53 / C-57): ci.yml's jobs map holds exactly one job `test`; its key set is exactly the literal
+// JOB_KEYS_CI (sorted compare, duplicates kept) and its runs-on line is exactly RUNS_ON_LINE. Job names are read at indent 2
+// and job keys at indent 4 only, plain or quoted (STEP_KEY_RE / stepKeyName), so a key nested deeper or commented out never
+// satisfies the pin and a quoted job-level continue-on-error / if cannot slip past the unquoted rows. Literal, never derived.
+const JOB_KEYS_CI = Object.freeze(['name', 'runs-on', 'steps', 'strategy', 'timeout-minutes']);
+function ciJobProblems(t) {
+    const ls = linesOf(t), p = [], tag = '.github/workflows/ci.yml: cijob ';
+    const at = ls.map((l, i) => (l === 'jobs:' ? i : -1)).filter((i) => i >= 0);
+    if (at.length !== 1) return [tag + at.length + ' "jobs:" lines (want 1)'];
+    const jobs = [], keys = [], runsOn = [];
+    let cur = null;
+    for (let j = at[0] + 1; j < ls.length; j++) {
+        const l = ls[j], where = tag + 'line ' + (j + 1) + ': ';
+        // before the comment / blank skip: a CR or tab is a YAML line break / indent the line model cannot see
+        if (/[^\x20-\x7e]/.test(l)) { p.push(where + 'char outside printable ASCII'); continue; }
+        if (l.trim() === '' || l.trim().startsWith('#')) continue;
+        const ind = indentOf(l);
+        if (ind === 0) break;
+        if (ind > 4 && cur !== null) continue;   // a nested value (strategy, steps, a block scalar), not a job key
+        if (ind !== 2 && !(ind === 4 && cur !== null)) { p.push(where + 'unexpected indent ' + ind + ': ' + JSON.stringify(l)); continue; }
+        const rest = l.slice(ind), k = STEP_KEY_RE.exec(rest);
+        if (k === null) { p.push(where + 'key does not parse: ' + JSON.stringify(l)); continue; }
+        const key = stepKeyName(k);
+        if (ind === 2) {
+            jobs.push(key);
+            cur = key;
+            if (rest.slice(k[0].length).trim() !== '') p.push(where + 'job ' + key + ' is not a bare block mapping: ' + JSON.stringify(l));
+        } else if (cur === 'test') {
+            keys.push(key);
+            if (key === 'runs-on') runsOn.push(l);
+        }
+    }
+    if (jobs.join(',') !== 'test') p.push(tag + 'jobs ' + JSON.stringify(jobs) + ' (want exactly test)');
+    const got = keys.slice().sort();
+    if (got.join(',') !== JOB_KEYS_CI.join(',')) p.push(tag + 'keys ' + JSON.stringify(got) + ' (want ' + JOB_KEYS_CI.join(',') + ')');
+    if (runsOn.length !== 1 || runsOn[0] !== RUNS_ON_LINE) p.push(tag + 'runs-on ' + JSON.stringify(runsOn) + ' (want exactly ' + JSON.stringify(RUNS_ON_LINE) + ')');
+    return p;
+}
+const isCiJobProblem = (s) => / cijob /.test(s);
 // C-57 STEPKEYS (P99): every step of the checked job, in order, by name, with its exact top-level key set (sorted compare,
 // duplicates kept). Keys are read at the step's own indentation, plain or quoted ("k": / 'k': normalize to k), so a quoted
 // continue-on-error / shell / if cannot slip past the unquoted regex rows. Literal per step, never derived from the file.
@@ -494,6 +534,9 @@ const CHECKS = {
         // fail-open mutants M17 / M18 / M20 / M25 / M44 / M56..M58 already target failclosed, so a separate check would fail twice)
         for (const [f, t] of WFS(w)) p.push(...stepKeyProblems(f, t, STEP_KEYS_AB));
         p.push(...stepKeyProblems('.github/workflows/ci.yml', w.ci, STEP_KEYS_CI));
+        // C-63 CIJOBKEYS: ci.yml's job set, job key set and runs-on (folded here, not in ci: an unquoted job-level if: /
+        // continue-on-error already fails the if-outside-a-step / continue-on-error rows above, so a ci-check row would fail twice)
+        p.push(...ciJobProblems(w.ci));
         for (const [f, t] of WFS(w)) {
             const st = stepsOf(t);
             const si = st.findIndex((s) => s.name === 'selftest'), gi = st.findIndex((s) => s.name === GATE_STEP);
@@ -592,6 +635,7 @@ function mutant(where, from, to) {
         return m;
     };
 }
+const CI_RO = RUNS_ON_LINE + '\n';   // ci.yml's job-level runs-on line (C-63 mutant anchor; in ci.yml exactly once)
 const MUTANTS = [
     // ASSERTION 1's six
     ['M1 last flag dropped', 'flags', mutant('both', '--max-semi-space-size=4 --single-threaded-gc\n', '--max-semi-space-size=4\n')],
@@ -680,6 +724,23 @@ const MUTANTS = [
     ['M69 duplicate quoted run key on selftest (last key wins)', 'failclosed', mutant('both', "logs/selftest.log\n      # the step's status", "logs/selftest.log\n        \"run\": \"true\"\n      # the step's status")],
     ['M70 missing uses on checkout (C)', 'failclosed', mutant('both', '      - name: checkout\n        uses: actions/checkout@v7\n', '      - name: checkout\n')],
     ['M71 col-0 comment then single-quoted continue-on-error after selftest', 'failclosed', mutant('both', "logs/selftest.log\n      # the step's status", "logs/selftest.log\n# c\n        'continue-on-error': true\n      # the step's status")],
+    // FILL8 (C-63 CIJOBKEYS): ci.yml's job level; each caught by the cijob row (M75 also by the unquoted if-outside-a-step
+    // row, same check); controls below pin which compare (jobs / keys / runs-on) owns each
+    ['M72 (C-63) double-quoted job-level continue-on-error on ci test', 'failclosed', mutant('ci', CI_RO, CI_RO + '    "continue-on-error": true\n')],
+    ['M73 (C-63) col-0 comment then single-quoted continue-on-error after the ci steps', 'failclosed', mutant('ci', '        run: npm run torture\n', "        run: npm run torture\n# c\n    'continue-on-error': true\n")],
+    ['M74 (C-63) double-quoted job-level if: false on ci test', 'failclosed', mutant('ci', CI_RO, CI_RO + '    "if": false\n')],
+    ['M75 (C-63) unquoted job-level if: false on ci test', 'failclosed', mutant('ci', CI_RO, CI_RO + '    if: false\n')],
+    ['M76 (C-63) a second job beside ci test', 'failclosed', mutant('ci', 'jobs:\n  test:\n', 'jobs:\n  lint:\n    runs-on: ubuntu-latest\n  test:\n')],
+    ['M77 (C-63) ci job renamed', 'failclosed', mutant('ci', 'jobs:\n  test:\n', 'jobs:\n  unit:\n')],
+    ['M78 (C-63) ci runs-on: self-hosted', 'failclosed', mutant('ci', CI_RO, '    runs-on: self-hosted\n')],
+    ['M79 (C-63) unknown extra job key on ci test (container:)', 'failclosed', mutant('ci', CI_RO, CI_RO + '    container: node:22\n')],
+    ['M80 (C-63) missing job key on ci test (timeout-minutes dropped)', 'failclosed', mutant('ci', '    timeout-minutes: 30\n', '')],
+    ['M81 (C-63) ci timeout-minutes commented out', 'failclosed', mutant('ci', '    timeout-minutes: 30\n', '    # timeout-minutes: 30\n')],
+    ['M82 (C-63) ci timeout-minutes nested into strategy', 'failclosed', mutant('ci', '    timeout-minutes: 30\n    strategy:\n', '    strategy:\n      timeout-minutes: 30\n')],
+    ['M83 (C-63) duplicate job key on ci test (last wins)', 'failclosed', mutant('ci', '    timeout-minutes: 30\n', '    timeout-minutes: 30\n    timeout-minutes: 0\n')],
+    ['M84 (C-63) double-quoted runs-on key, self-hosted', 'failclosed', mutant('ci', CI_RO, '    "runs-on": self-hosted\n')],
+    ['M85 (C-63) explicit-key job-level continue-on-error on ci test', 'failclosed', mutant('ci', CI_RO, CI_RO + '    ? continue-on-error\n    : true\n')],
+    ['M86 (C-63) CR hides a quoted job-level continue-on-error', 'failclosed', mutant('ci', '    timeout-minutes: 30\n', '    timeout-minutes: 30\r    "continue-on-error": true\n')],
 ];
 
 // ---------------------------------------------------------------- tests
@@ -803,6 +864,36 @@ test('control (C-57): stepkeys pins step names, order and count (a renamed, reor
         assert.ok(p.some(isStepKeyProblem), what + ': stepkeys silent');
         assert.deepEqual(p.filter((s) => !isStepKeyProblem(s)), [], what + ': another failclosed row fires');
     }
+});
+test('control (C-63): the unmutated ci.yml gives no cijob problem; M72..M86 are caught by the cijob row, only M75 also by another row', () => {
+    assert.deepEqual(ciJobProblems(WORLD.ci), []);
+    const sel = MUTANTS.filter((m) => /^M(7[2-9]|8[0-6]) /.test(m[0]));
+    assert.equal(sel.length, 15);
+    for (const [what, , mk] of sel) {
+        const p = CHECKS.failclosed(mk(WORLD, what));
+        assert.ok(p.some(isCiJobProblem), what + ': cijob row silent');
+        // the unquoted job-level if: is the one form an older row already saw; every quoted / key-set form is the cijob row's alone
+        const others = p.filter((s) => !isCiJobProblem(s));
+        if (what.startsWith('M75 ')) assert.deepEqual(others, ['.github/workflows/ci.yml: 1 if: outside a step'], what);
+        else assert.deepEqual(others, [], what + ': another failclosed row also fires (not a gap probe)');
+    }
+});
+test('control (C-63): each compare (jobs set / key set / runs-on) has mutants that it alone catches; a broken jobs: anchor fails closed', () => {
+    const cmp = (s) => (/ cijob jobs /.test(s) ? 'jobs' : / cijob keys /.test(s) ? 'keys' : / cijob runs-on /.test(s) ? 'runs-on' : 'other');
+    const want = {
+        M72: ['keys'], M73: ['keys'], M74: ['keys'], M75: ['keys'], M76: ['jobs'], M77: ['jobs', 'keys', 'runs-on'], M78: ['runs-on'],
+        M79: ['keys'], M80: ['keys'], M81: ['keys'], M82: ['keys'], M83: ['keys'], M84: ['runs-on'], M85: ['other', 'other'], M86: ['other', 'keys'],
+    };
+    for (const [what, , mk] of MUTANTS.filter((m) => Object.hasOwn(want, m[0].split(' ')[0]))) {
+        assert.deepEqual(ciJobProblems(mk(WORLD, what).ci).map(cmp), want[what.split(' ')[0]], what);
+    }
+    // M84: the quoted "runs-on" key normalizes (the key set holds), so only the runs-on line compare catches it
+    assert.deepEqual(ciJobProblems(WORLD.ci.replace('    runs-on:', "    'runs-on':")).map(cmp), ['runs-on'], 'single-quoted runs-on key');
+    assert.deepEqual(ciJobProblems(WORLD.ci.replace('    timeout-minutes:', "    'timeout-minutes':").replace('    name:', '    "name":')), [], 'quoted allowed keys normalize');
+    assert.deepEqual(ciJobProblems(WORLD.ci.replace('jobs:\n', 'jobs: # c\n')), ['.github/workflows/ci.yml: cijob 0 "jobs:" lines (want 1)'], 'no exact jobs: line');
+    assert.deepEqual(ciJobProblems(WORLD.ci + 'jobs:\n'), ['.github/workflows/ci.yml: cijob 2 "jobs:" lines (want 1)'], 'a second jobs: line');
+    assert.deepEqual(ciJobProblems(WORLD.ci.replace('  test:\n', '  test: { }\n')).map(cmp), ['other'], 'flow-style job value');
+    assert.deepEqual(ciJobProblems(WORLD.ci.replace('    runs-on:', '   runs-on:')).map(cmp), ['other', 'keys', 'runs-on'], 'indent-3 key');
 });
 test('the real files are untouched by the mutants (in-memory only)', () => {
     assert.deepEqual(loadWorld(), WORLD);

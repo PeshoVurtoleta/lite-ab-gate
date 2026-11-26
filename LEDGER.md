@@ -266,9 +266,12 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Gate:** test/docs.template.test.mjs (a mutant per neutralizer form). FILL7 (C-57, review r1 2 LITERAL -> r2
   APPROVED): every step of the ab job (both ab files) and of the ci.yml `test` job is pinned to a literal key set,
   quoted keys normalized (`"k":` / `'k':`), step names / order / count pinned, a step-level `if:` read at the step's
-  own indent only; 13 checks / 71 mutants (M61..M71 added, M61 = P99), 96 tests in the file. Open remainder:
-  ci.yml job-level key pin (quoted job-level `"continue-on-error": true` / `"if": false` pass every check) -> new
-  FILLER, needs a maintainer ruling extending C-53.
+  own indent only; 13 checks / 71 mutants (M61..M71 added, M61 = P99), 96 tests in the file. FILL8 (C-63, review
+  r1 1 LITERAL -> r2 APPROVED, burst 10): ci.yml jobs exactly `test`, its key set exactly JOB_KEYS_CI (quoted keys
+  normalized), runs-on exact; quoted job-level `"continue-on-error": true` / `"if": false` now caught; 13 checks /
+  86 mutants (M72..M86), 113 tests in the file. Open remainder (FILL8 review): ci.yml has no top-level key allowlist
+  and no exact `defaults:` block -- a top-level `env: NODE_OPTIONS: --test-only` (measured: tests 1, pass 1, exit 0)
+  and a quoted `"shell": bash -c true {0}` under defaults pass every check; ruled C-64, implementing unit FILL9.
 - **Reopens with:** a new way to neutralize a step's exit status that no mutant covers.
 
 ### B3. A d.ts gate outside the `npm test` glob and a test that skips when tsc is absent were vacuous passes *(FOUND 2026-11-25, G-A B3 review r1; FIXED r2)*
