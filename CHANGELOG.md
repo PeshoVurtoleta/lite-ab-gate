@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Package surface: 13 exports (`defineGate`, `judgeSpec`, `runGate`, `verdictOf`, `AA_HI`, `AA_LO`, `ALLOC_MAX`, `C_COPIES`, `EXIT`, `K_ROUNDS`, `REQUIRED_FLAGS`, `SLOW_MED`, `SLOW_Q1`) in `ABGate.js`, with hand-written types in `ABGate.d.ts` (C-1, C-26).
+- CLI modes: `--run ALL`, `--run <ids>` (always NO VERDICT), `--oracle-only`, `--selftest`, `--selftest-untimed`, `--verdict-file <log|->`; exits 0 PASS / 3 FINDING / 2 NO VERDICT / 1 STOP or crash (C-15).
+- Workflow template `templates/ab.yml` (two PARAM lines, dispatch-only, both OS) and the package's own `.github/workflows/ab.yml` and `ci.yml` (C-24, C-17, C-31).
+- Example gate `examples/ab.gate.mjs` with its frozen kernel `examples/ab.kernel.js` (lanes `null` gated WITHIN, `double` gated SLOWER; C-24).
+- `README.md` on the suite blueprint spine (lane contract, the reserved VOID kinds, the one re-dispatch rule, the node >= 26 scope of the zero-tool-bytes claim, the hoisted-loop re-proof slot, both timed scripts under `quiet-lock run --strict`), `llms.txt`, and ADRs `decisions/0001-hotloop.md`, `0002-live.md`, `0003-dialect.md` (repo only, not in the tarball) (C-16, C-18 (f)).
+- npm scripts `reproof` (`node bench/reproof.mjs`) and `selftest:timed` (`node test/selftest.timed.mjs`), both STATISTICAL, outside `test`, `verify` and `prepublishOnly` (C-39); `examples/ab.kernel.js` added to `files[]`.
+- `test/docs.test.mjs`: doc-truth checks (API names, constants, REQUIRED_FLAGS, wording, ASCII, license, pack list, marker counts, the re-proof slot) with in-memory mutants (C-29).
 - SETTLE line `SETTLE lane=<id> passes=<n> pass-bytes=<v,..> settled=yes|no` (passes 1-3), printed per lane before the WINDOW line; under `AB_GATE_INJECT=no-settle` it reads `SETTLE lane=<id> skipped (AB_GATE_INJECT=no-settle)` (C-48).
 - VOID kind `TIER-SETTLE pass-bytes b1,b2,b3 (cap 3, none read exactly 0)`: no settle pass read exactly 0 bytes; the lane's single window still runs and nothing is re-run (C-48, C-7).
 - Injections `no-settle` and `settle-void`, torture-only like `tool-deopt`: the timed `--selftest` list and counts (untimed 67, timed 11) are unchanged (C-49).

@@ -1,0 +1,80 @@
+# @zakkster/lite-ab-gate
+
+The STATISTICAL timing A/B gate for zero-GC kernels. Compiles a frozen kernel (A) and a candidate (B) fresh,
+times them interleaved with an A/A noise twin and a SLOW control, and prints one fail-closed verdict: per lane
+FASTER / SLOWER / WITHIN / VOID, per run PASS / FINDING / NO VERDICT with exit 0 / 3 / 2 (1 = STOP or crash). Run once
+per release candidate, never inside npm test. Single-file ESM (ABGate.js), hand-written types (ABGate.d.ts), zero
+runtime dependencies, Node >= 22.
+
+## Exports (13)
+
+4 functions and 9 constants. No classes, no module state; importing the module does nothing.
+
+- `defineGate` (spec) -> deep-frozen spec; throws on an unknown key, an empty `gated` map, K < 11, C < 3
+- `judgeSpec` (input) -> frozen judging spec; throws on a bad input; tool dialect requires `laneSha` (64 lowercase hex)
+- `runGate` (gateFile, opts?) -> Promise<0 | 1 | 2 | 3>; opts { run, K, oracleOnly, out }, a plain object; needs REQUIRED_FLAGS
+- `verdictOf` (spec, lines) -> { code, reported, text }; pure; code 0 | 2 | 3
+- `AA_HI` 1.05 (A/A band high edge)
+- `AA_LO` 0.95 (A/A band low edge)
+- `ALLOC_MAX` 0.015625 (bytes per op limit, 1/64)
+- `C_COPIES` 3 (fresh compilations per column; a gate may raise it to 9)
+- `EXIT` { PASS: 0, STOP: 1, NO_VERDICT: 2, FINDING: 3 }
+- `K_ROUNDS` 11 (counted rounds per window; a gate may raise it to 51)
+- `REQUIRED_FLAGS` the node flags a gate run needs: `--expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc`
+- `SLOW_MED` 1.25 (SLOW control median must exceed it)
+- `SLOW_Q1` 1.1 (SLOW control q1 must exceed it)
+
+## Contract
+
+- Gate file: default export = the spec. `{ name, frozen: [{ name, frozen, sha256, live? }], transform(name, text), gated: { laneId: word }, shape?, lanes, harnessControls?, K?, C? }`. Unknown keys fail closed.
+- Lane: `{ id, ops (power of two >= 4), minWindow (1..ops/2), spin, recLen, A, B, bend: [from, to], make() -> { data, ref(op, out, off), foldOf(rec, off) }, workFloor?(start, n) -> reason | null }`.
+- Column: `{ source, anchor (unique text ending in '{'), setup, run, one }`, all SOURCE TEXT, compiled fresh per copy.
+- `gated` is declared before any run and is never derived from one. A gate may raise K (11..51) and C (3..9), never lower them; the band, SLOW and ALLOC limits are tool constants.
+- Words: SLOWER = median > 1.05 and q1 > 1; FASTER = median < 0.95 and q3 < 1; else WITHIN. A lane whose A/A twin leaves [0.95, 1.05] is VOID AA-DRIFT.
+- VOID kinds (reserved, a workFloor reason may not START WITH one; prefix match, so `NANO x` is refused): SLOW-DEAD, AA-DRIFT, REPS-DRIFT, NOT-TF, ALLOC, GC-WINDOW, NAN, TIER-SETTLE. A workFloor reason is `"<KIND> <text>"`; a reserved-kind refusal prints `STOP HARNESS: spec: ...`, a malformed reason prints `STOP HARNESS: <lane>: workFloor reason must be "<KIND> <text>", got ...`; both exit 1.
+- workFloor is checked pre-clock only when its answer depends on (start, n) alone; otherwise the per-lane check is a backstop and can STOP after clock reads.
+- FINDING wins over VOID in a complete run; a missing lane or a `--run <ids>` subset is NO VERDICT. A NO VERDICT run gets ONE re-dispatch; a FINDING is never re-run. No in-job re-run exists.
+- Frozen / live paths: relative = against the gate file's directory; absolute = local only (STOP HARNESS when GITHUB_ACTIONS=true).
+- Legacy dialect `'ab-gate@7e0f9262'` (judgeSpec only, never from a gate file or the CLI) skips exactly 4 tool-only checks.
+
+## Allocation
+
+The in-window timed loop allocates 0 tool bytes (printed as `WINDOW lane=<id> tool-bytes=<n>`), gated by npm run torture on node >= 26 only: on Node 22 performance.now() boxes 16 B per read. Each column's bytes per op must be below ALLOC_MAX, else VOID ALLOC. Importing the module prints nothing and adds no globals.
+
+## Usage
+
+```js
+// bench/ab.gate.mjs: copy examples/ab.gate.mjs and replace the kernel, the lanes and the oracle
+import { defineGate } from "@zakkster/lite-ab-gate";
+export default defineGate({ name: "my-kernel", frozen: [/* ... */], transform: (name, text) => text, gated: { "lane-1": "WITHIN" }, lanes: [/* ... */] });
+```
+
+```bash
+FLAGS="--expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc"
+node $FLAGS node_modules/@zakkster/lite-ab-gate/ABGate.js bench/ab.gate.mjs --oracle-only   # no clock
+node $FLAGS node_modules/@zakkster/lite-ab-gate/ABGate.js bench/ab.gate.mjs --run ALL       # the verdict
+node node_modules/@zakkster/lite-ab-gate/ABGate.js bench/ab.gate.mjs --verdict-file gate.log   # re-judge a saved log
+```
+
+```js
+import { runGate, EXIT } from "@zakkster/lite-ab-gate";
+const code = await runGate("bench/ab.gate.mjs", { run: "ALL" });   // 0 PASS | 1 STOP | 2 NO VERDICT | 3 FINDING
+```
+
+## Workflow template
+
+`templates/ab.yml` is the hosted release gate: copy it to `.github/workflows/ab.yml` and edit ONLY the two lines tagged PARAM (AB_GATE: your gate file, repo-relative; AB_NODE: the exact x.y.z verdict pin). It is dispatch-only (`gh workflow run ab.yml`), run once per release candidate, never on a schedule, never a required check. It pins the runner identity and the node version, installs with `npm ci --ignore-scripts`, runs `--selftest` and then `--run ALL` on ubuntu-latest and macos-latest, and uploads one log artifact per OS. The gate passes only when BOTH OS read PASS in the same dispatch. A harness failure on a runner is NO VERDICT, never host evidence. A NO VERDICT run gets ONE re-dispatch; a FINDING is never re-run to get the word back. The package dogfoods it against `examples/ab.gate.mjs`.
+
+## Gates (deterministic unless stated)
+
+npm test (deterministic only): spec validation, the judge on fixture lines, parity against the prototype and ab-gate 7e0f9262 logs, untimed selftest rows, workFloor rows, mutants, hot-body parity, docs tests (markers: 14 (10 timed)), types. npm run torture (node >= 26): zero tool bytes in the window and retention. STATISTICAL, outside npm test and never in verify: the timed selftest (`npm run selftest:timed`) and the hoisted-loop re-proof (`npm run reproof`), both under `quiet-lock run --strict`; and the hosted both-OS verdict from the workflow.
+
+## What this is not
+
+Not a benchmark runner (no throughput table, no absolute-time gate). Not an npm test gate. Not a way to re-run a lane until it passes. Not a number that transfers across CPUs or node versions. Not a profiler.
+
+## Links
+
+README.md (full reference), CHANGELOG.md, ABGate.d.ts, templates/ab.yml, examples/ab.gate.mjs.
+
+MIT (c) Zahary Shinikchiev <shinikchiev@yahoo.com>

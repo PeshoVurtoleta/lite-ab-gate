@@ -2,6 +2,7 @@
 // MIT (c) Zahary Shinikchiev <shinikchiev@yahoo.com>
 // ASCII only. Matches ABGate.js export for export (names, optionality, readonly, literal types).
 // judgeSpec / verdictOf match rung J1 (C-13, C-14, C-27, C-28, C-33).
+// Tool dialect only (the legacy dialect skips these): C-34, C-40..C-42, C-47, C-50, C-51, C-54..C-56.
 
 /** A verdict word printed per lane: B/A against the A/A band (C-5). (LaneRow.word and wordAB also admit 'NONE' = a non-finite median.) */
 export type Word = 'FASTER' | 'SLOWER' | 'WITHIN';
@@ -54,7 +55,7 @@ export interface Lane {
     /** `[from, to]`, two different strings: the bent-oracle selftest edit of B's text. */
     readonly bend: readonly [string, string];
     readonly make: () => LaneMade;
-    /** Optional: a reason text when the window [start, start + n) holds too little work, else null. */
+    /** Optional: a reason text when the window [start, start + n) holds too little work, else null. Format "<KIND> <text>" (C-59). A reason starting with one of the 8 reserved tool VOID kinds (SLOW-DEAD, AA-DRIFT, REPS-DRIFT, NOT-TF, ALLOC, GC-WINDOW, NAN, TIER-SETTLE) is STOP HARNESS 'spec: ...'; the prefix rule reserves them as a prefix ("NANO x" is reserved too). Checked pre-clock only for a workFloor pure in (start, n); otherwise the backstop after timing catches it. */
     readonly workFloor?: (start: number, n: number) => string | null;
 }
 
@@ -141,7 +142,7 @@ export interface JudgeSpecInput {
     readonly run?: string;
     /** The gate file's sha256 (64 lowercase hex) the HEADER spec line must carry: required in the tool dialect (C-33); judgeSpec throws if omitted. The legacy dialect ignores it. NOTE: it covers the top gate file only. */
     readonly laneSha?: string;
-    /** The one judge-only dialect: skips the 4 tool-only checks (HEADER spec line, reps / AB / n-a, warm (RESULT warm=1, WARM line, RAW of K values), PROV grammar (PROV start / end, HEADER arch)). API only, never from a gate file or the CLI. */
+    /** The one judge-only dialect: skips the 4 tool-only checks (HEADER spec line, reps / AB / n-a, warm (RESULT warm=1, WARM line, RAW of K values), PROV grammar (PROV start / end, HEADER arch)). API only, never from a gate file or the CLI. Tool-dialect checks only (C-34, C-40..C-42, C-47, C-50, C-51, C-54..C-56); the legacy dialect skips them. */
     readonly dialect?: 'ab-gate@7e0f9262';
 }
 

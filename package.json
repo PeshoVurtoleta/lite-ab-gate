@@ -30,6 +30,7 @@
     "ABGate.d.ts",
     "templates/ab.yml",
     "examples/ab.gate.mjs",
+    "examples/ab.kernel.js",
     "llms.txt",
     "LICENSE.txt",
     "CHANGELOG.md",
@@ -39,6 +40,8 @@
     "test": "node --test \"test/*.test.mjs\"",
     "torture": "node --expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc test/torture.mjs",
     "parity:r1": "node --expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc test/parity-r1.mjs",
+    "reproof": "node bench/reproof.mjs",
+    "selftest:timed": "node test/selftest.timed.mjs",
     "verify": "npm test && npm run torture",
     "prepublishOnly": "npm test"
   },
