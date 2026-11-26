@@ -524,7 +524,7 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   gaps (uncapped ladder, sweep format check, format regex) -> r2 APPROVED.
 - **Reopens with:** a tool VOID kind emitted outside TOOL_VOID_KINDS (R7 reads only pushes whose first literal is a single-quoted kind followed by a space, `voids.push('KIND ...`, concatenated or not; a kind followed by a colon (`'ZZZ: ' + x`), a double-quoted string, a template literal or a variable is a known gap, FILLER).
 
-### B17. The self-busy launcher: the re-proof harness's busy-node rule skipped only its own pid, so both calibration holds read busy-node INVALID at 1-G start *(FOUND 2026-11-26 burst 11, U9 calibration holds; RULED C-67 / SPEC A32, A33, A34; status: FIXED in the tree by U9A2, burst 12, commit pending; re-run calibration hold 0 ran burst 13: INVALID on the PIDS outer itself, see B18 (OPEN))*
+### B17. The self-busy launcher: the re-proof harness's busy-node rule skipped only its own pid, so both calibration holds read busy-node INVALID at 1-G start *(FOUND 2026-11-26 burst 11, U9 calibration holds; RULED C-67 / SPEC A32, A33, A34; status: FIXED by U9A2 da95e45, burst 12; re-run calibration hold 0 ran burst 13: INVALID on the PIDS outer itself, see B18 (RULED, fix unit U9A3))*
 - **What happened:** `bench/reproof.mjs` `busyNodes` and the child PROV busy list skipped only their own pid. Both
   calibration holds read busy-node INVALID at `1-G start`. C-67 (A32) attributes this to a launcher node process (the
   quiet-lock wrapper, the outer's parent). Neither harness wrote a PIDS line, so no pid is confirmed. 311761f (2026-11-25,
@@ -551,7 +551,7 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Reopens with:** a wrapper or launcher that is not the outer's direct parent, or a busy-node source the PIDS line does
   not name; the change must clear both test files above.
 
-### B18. The C-67 cold settle accepted a first-sample ps reading of 0.0 for the outer, so the outer's own start-up burst read busy-node at child 1 *(FOUND 2026-11-26 burst 13, U9A2 calibration hold 0; status: OPEN, maintainer question Q-U9-COLDMIN)*
+### B18. The C-67 cold settle accepted a first-sample ps reading of 0.0 for the outer, so the outer's own start-up burst read busy-node at child 1 *(FOUND 2026-11-26 burst 13, U9A2 calibration hold 0; RULED C-67 minimum dwell / SPEC A36, A37 (Q-U9-COLDMIN (a)); status: FIXED in the tree by U9A3, burst 14, commit pending)*
 - **What happened:** U9A2 calibration hold 0 (b418c3a / ABGate.js 1d4d4255, harness bench/reproof.mjs 396542ec,
   2026-11-26 09:43-09:47Z, load1 1.46, baseline 2.34, QUIET, Node v26.8.2, not counted). outer.log:
   `PIDS outer=89404 parent=89397`, `COLD polls=1 cap=60 interval-ms=500 outer=0 parent=8.5 settled=yes`. The hold exited 2
@@ -565,11 +565,23 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
 - **Evidence:** .handoff/evidence/U9-B2/calA2.log; .handoff/evidence/U9-cal-b418c3a-2/hold-0/outer.log, 1-G.log; .handoff/research/u9a2-cold/RESULT.txt (probe, 1 run).
 - **Law:** a macOS ps pcpu reading is a decayed average; a sample taken before the process has history (or one single sample) is
   not evidence of cold. Law 4 (the settle accepted a reading that cannot show cold); no new numbered law yet.
-- **Gate:** none yet. Open: maintainer question Q-U9-COLDMIN, options (a) minimum dwell -- settled only after both pids read
-  < 10 on 2 consecutive polls with the first at outer uptime >= 2000 ms; (b) exempt the PIDS outer + parent from child
-  PROV busy lists; (c) both; (d) leave U9 PENDING. No ruling yet (plan-U9A2-v1 RISK routed it to the maintainer). 0 of 8
-  counted U9 attempts spent.
-- **Reopens with:** n/a (open); a fix must clear test/reproof.cold.test.mjs and test/reproof.judge.test.mjs.
+- **Gate:** none yet (U9A3 adds it). Ruled 2026-11-26 (maintainer, AskUserQuestion; plan-U9A2-v1 RISK routed it):
+  Q-U9-COLDMIN = "(a) Minimum dwell (Recommended)" -- settled only after both pids read < 10 on 2 consecutive polls, the
+  first at outer uptime >= 2000 ms (500 ms polls, cap 60 unchanged); parseOuter STOPs on settled=yes with fewer polls
+  than that allows; busy-node stays strict on every pid. Not chosen: (b) exempt the PIDS outer + parent from child PROV
+  busy lists, (c) both, (d) leave U9 PENDING. Fix unit U9A3. 0 of 8 counted U9 attempts spent (NEXT.md burst 13 state;
+  no research/u9 dir exists).
+- **Fix (U9A3, burst 14):** bench/reproof.mjs 396542ec -> 88699a64; coldSettle(read, sleep, pids, now) settles on a
+  cold PAIR of polls whose first poll is at floor(uptime ms) >= 2000; COLD line `... dwell-ms=2000 pair-ms=<int>
+  prev-outer= prev-parent= outer= parent= settled=`; parseOuter STOPs on the old grammar, polls outside 2..60, dwell-ms
+  != 2000, pair-ms < (polls-2) x 500, settled disagreeing with the 4 readings. Review r1 REJECTED 3 LITERAL -> r2
+  APPROVED. Calibration hold 0 -3 (2026-11-26 16:28-16:31Z, QUIET load1 2.71, baseline 2.34, Node v26.8.2, 1 run, not
+  counted): COLD polls=6 pair-ms=2154 settled=yes; every PROV busy list empty (the cold part of plan ASSERTION 7' PASS);
+  the hold itself read KILL on r(B/AB), see C2.
+- **Gate:** test/reproof.cold.test.mjs H2-H5, H7-H10 and test/reproof.judge.test.mjs J1, J2 + 7 migrated rows (red on
+  396542ec); the burst-13 outer.log lines are a literal must-fail (H7: malformed -> STOP).
+- **Reopens with:** a calibration or counted hold whose PROV busy list holds a PIDS pid after a settled COLD line; a
+  non-macOS host whose ps pcpu is not a decayed average. Must clear both reproof test files.
 
 ## C. Measurements (this package's own runs on ABGate.js)
 
@@ -609,6 +621,28 @@ not X.
   total, burst9-U9EB3-mutants-r2.log); judge.extra TIER-SETTLE rows; test/hotbody.parity.test.mjs (DETERMINISTIC, npm test;
   burst9-U9EB3-npmtest-r2.log).
 - **Reopens with:** a new frozen G calibration re-run (after U9E review APPROVED) closes the U9E part; a callee tier-up inside the window on a settled lane reopens it.
+### C2. Calibration hold 0 on G b418c3a reads r(B/AB) 1.075-1.093 on bounds:1e5:1e5 in 3 of 3 runs: a per-hold band KILL *(FOUND 2026-11-26 burst 14, U9A3 calibration hold 0 -3; RULED Q-U9-ABBAND (a) diagnose first, SPEC C-68 / A38; status: OPEN, research unit U9F)*
+- **What happened:** calibration hold 0 -3 (G = frozen b418c3a / ABGate.js 1d4d4255, harness 88699a64, 2026-11-26
+  16:28-16:31Z, QUIET load1 2.71, baseline 2.34, Node v26.8.2, darwin arm64 Apple M4 Pro 12 cores, V8 14.6.202.34-node.28, 1 run, not counted) exited 3: `JUDGE kill
+  bounds:1e5:1e5 r(B/AB)=1.0927 outside [0.95, 1.05]`. Same lane, same G, earlier calibrations: 1.0752 (-1) and
+  1.0898 (-2) (-1 2026-11-26 05:23Z load1 1.82; -2 09:43Z load1 1.46; same host / Node, 1 run each); both holds were INVALID first, which hid the KILL. On the pre-C-48 G d4991c39 (U9-cal): 1.0172 (2026-11-25 06:47Z, WHY QUIET load1 2.80, LOAD start 2.90, 1 run). r(B/A)
+  on that lane: 0.9905 / 0.9899 / 0.9904. Calibration numbers are VOID as evidence of the re-proof (law 6); they are
+  recorded as the reason for the diagnosis.
+- **Reason (candidate, UNVERIFIED):** reps A:256 B:1 AB:1; per-run ab (A fresh at B's reps / A) reads 1.079 / 1.102 on
+  G and 1.106 on M but 1.185 / 1.208 on P, so B/AB = (B/A) / ab reads about 9 % higher on G. Candidate: the C-48 settle
+  passes (G only) tier the AB copies' callee `boundsInto` before the window (C1 side finding: AB copies tier up at their
+  4th call), so G's AB column is warmer than the frozen prototype's.
+- **Evidence:** .handoff/evidence/U9-B2/calA3.log (RESULT block), calA3-console.log;
+  .handoff/evidence/U9-cal-b418c3a-3/hold-0/ (5 logs + outer.log); -2 and -1 outer.log JUDGE lines; U9-cal/hold-0.
+- **Law:** law 5 (the per-hold B/AB band was pre-registered by plan-U9-v1 SPEC :13-14 (the statistic "same for B/AB") and its ASSERTION 1 "B/AB the same on both bounds lanes";
+  it is not changed after seeing data without the mechanism); law 6.
+- **Gate:** none yet. Ruled 2026-11-26 burst 14 (maintainer, AskUserQuestion): Q-U9-ABBAND = "(a) Diagnose first
+  (Recommended)": "No counted hold. A research unit U9F (like U9D)
+  probes the mechanism: G vs P AB column with and without the C-48 settle (AB_GATE_INJECT=no-settle), untimed byte
+  counts plus a few quiet-lock runs, a FINDING + LEDGER entry, then the maintainer rules the band. U9 B2 and U10b stay
+  blocked." Not chosen: "(b) Band B/A only", "(c) Keep the band, run U9", "(d) Leave U9 PENDING".
+  0 of 8 counted U9 attempts spent.
+- **Reopens with:** n/a (open); U9F FINDING + a maintainer band ruling.
 
 ## D. Process lessons
 

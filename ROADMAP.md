@@ -203,7 +203,8 @@ reconciliations, C-46 records E1 behaviour (U3 review r1, A3), and C-60 records 
 - C-64 CITOPKEYS (Q-CITOPKEYS (a) "Allowlist + exact defaults", A29): ci.yml top-level keys exactly name, on, permissions,
   concurrency, defaults, jobs (quoted keys normalized, no top-level env), defaults block byte-exact. IMPLEMENTED burst 12 (FILL9); LEDGER B2 remainder closed.
 
-Open maintainer questions: Q-U9-COLDMIN (LEDGER B18): (a) minimum dwell, (b) exempt the PIDS outer + parent from child PROV busy lists, (c) both, (d) leave U9 PENDING; no ruling.
+Open maintainer questions: none (Q-U9-COLDMIN ruled (a) minimum dwell, SPEC A36 / C-67, fixed by U9A3, LEDGER B18;
+Q-U9-ABBAND ruled (a) diagnose first, SPEC C-68 / A38: research unit U9F before any counted U9 hold, LEDGER C2).
 
 ## 3. Program units (from the SPEC program-order table)
 
