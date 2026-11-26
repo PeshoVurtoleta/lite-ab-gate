@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `test/docs.template.test.mjs` pins the exact key set of every ab-job step (`templates/ab.yml`, `.github/workflows/ab.yml`) and of every ci.yml `test` job step, quoted keys included; 71 docs.template mutants after FILL7 (C-57).
 - `test/docs.template.test.mjs` pins ci.yml's jobs to exactly `test`, that job's key set and its `runs-on` (`${{ matrix.os }}`), quoted keys included; 86 docs.template mutants after FILL8 (C-63).
 - `test/selftest.timed.mjs` (timed harness, outside `npm test`, run under `quiet-lock --strict`) and `test/fixtures/timed-real/lines.json` + `surface.mjs`; `test/selftest.untimed.test.mjs` gains 6 rows: 3 gate the fixture (schema + lock provenance, marker gate on real lines, staleness), 3 slice ABGate.js (markerClash on all 14 own lines, the C-60 G1 timed-loop fold + VOID replay, the C-58 untimed fold) in `npm test` (C-38, C-60).
+- `test/reproof.cold.test.mjs` (6 rows) + 18 judge rows in `test/reproof.judge.test.mjs` (C-67).
 
 ### Changed
 
@@ -35,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bench/reproof.mjs` buildMutant accepts exactly one `T[1] = (PERF|performance).now();` read (C-61).
 - A lane's `workFloor` reason may not START WITH a tool VOID kind (SLOW-DEAD, AA-DRIFT, REPS-DRIFT, NOT-TF, ALLOC, GC-WINDOW, NAN, TIER-SETTLE; prefix match, so `NANO x` is refused): `STOP HARNESS: spec: <lane>.workFloor(<start>, <n>) reason "..." starts with the tool VOID kind <K> (reserved, C-59)`, VERDICT NO VERDICT (STOP HARNESS), exit 1 (C-59).
 - A pre-clock sweep (after lane selection, before the sources load and before any clock read, also on `--oracle-only`) calls `workFloor` at every (start, n) pair a timed run with this K can ask (n = minWindow doubling, capped at ops / 2; starts = the K + 1 round starts), the same pairs on `--oracle-only` (more than that run itself asks: it uses only n = minWindow) and applies both the reserved-kind check and the "<KIND> <text>" format check, so a malformed reason at any of those pairs now STOPs pre-clock too (stricter). Because the sweep runs before the sources load, a gate with both an anchor problem and a reserved or malformed `workFloor` now STOPs HARNESS where it used to STOP ANCHOR (still exit 1 / NO VERDICT). A `workFloor` that throws during the sweep reads CRASH before any clock read. The pre-clock STOP holds for a `workFloor` whose answer depends only on (start, n); for any other, the per-lane check stays as a backstop, and in a timed run that check runs after sizing, so its STOP can come after clock reads. Hot body byte-identical (C-59).
+- `bench/reproof.mjs` (the C-23 re-proof harness, STATISTICAL, outside `npm test`): cold settle before child 1 (C-67) with PIDS / COLD lines in outer.log, judged (cap hit -> INVALID; impossible line -> STOP); SETTLE / WINDOW grammar defects in a G / M log -> STOP (a malformed WINDOW line was already STOP; the only WINDOW change is non-numeric tool-bytes KILL -> STOP); any SETTLE line in a P log -> STOP.
 
 ### Fixed
 

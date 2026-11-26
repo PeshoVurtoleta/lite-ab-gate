@@ -521,6 +521,32 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   gaps (uncapped ladder, sweep format check, format regex) -> r2 APPROVED.
 - **Reopens with:** a tool VOID kind emitted outside TOOL_VOID_KINDS (R7 reads only pushes whose first literal is a single-quoted kind followed by a space, `voids.push('KIND ...`, concatenated or not; a kind followed by a colon (`'ZZZ: ' + x`), a double-quoted string, a template literal or a variable is a known gap, FILLER).
 
+### B17. The self-busy launcher: the re-proof harness's busy-node rule skipped only its own pid, so both calibration holds read busy-node INVALID at 1-G start *(FOUND 2026-11-26 burst 11, U9 calibration holds; RULED C-67 / SPEC A32, A33, A34; status: FIXED in the tree by U9A2, burst 12, commit pending; re-run calibration hold 0 PENDING, quiet lock BUSY)*
+- **What happened:** `bench/reproof.mjs` `busyNodes` and the child PROV busy list skipped only their own pid. Both
+  calibration holds read busy-node INVALID at `1-G start`. C-67 (A32) attributes this to a launcher node process (the
+  quiet-lock wrapper, the outer's parent). Neither harness wrote a PIDS line, so no pid is confirmed. 311761f (2026-11-25,
+  load start 2.90, Node v26.8.2): outer.log `BUSY start []`, with the busy pid only in the 1-G.log PROV start line,
+  `JUDGE invalid 1-G start busy-node [11.4 75921 node] quiet-lock quiet`. That hold also read a 3-M VOID (NOT-TF), twin
+  t=0.9792 INVALID and G tool-bytes=4320 KILL, `JUDGE hold 0 KILL`. b418c3a (2026-11-26, load start 1.82, Node v26.8.2):
+  `JUDGE invalid 1-G start busy-node [10.9 81404 node] quiet-lock quiet`, exit 2, `U9 PENDING valid=0/5 attempts=1`;
+  calA.log names it as the only reason.
+- **Root cause:** the busy-node rule excluded one pid (its own), not the launcher above it. A launcher node process can read
+  >= 10% CPU while it spawns, so a quiet host looked busy at the first child. The C-67 fix settles BOTH the outer's own pid
+  and its parent before child 1, so either candidate for the unlogged pid is covered; the new PIDS line names it from now on.
+- **Evidence:** .handoff/evidence/U9-cal/hold-0/outer.log, 1-G.log; .handoff/evidence/U9-cal-b418c3a/hold-0/outer.log, 1-G.log;
+  .handoff/evidence/U9-B2/calA.log; SPEC C-67 (A32 ruling, A33 / A34 planner + review choices).
+- **Fix (U9A2):** before child 1 the outer polls `ps` until its own pid and its parent both read < 10% CPU (COLD: max 10,
+  500 ms, cap 60 polls) and writes `PIDS outer=<pid> parent=<ppid>` and `COLD ... settled=yes|no` to outer.log. The
+  judge's busy-node rule is unchanged. COLD `settled=no` at the cap -> INVALID; an impossible COLD line -> STOP. SETTLE /
+  WINDOW grammar defects in a G / M log now STOP (review m7 / m8 survivors): a malformed WINDOW line was already STOP at
+  HEAD, the only WINDOW change is non-numeric tool-bytes KILL -> STOP; any SETTLE line in a P log -> STOP. Review r1 REJECTED 4 LITERAL (missing
+  controls, one fail-open accepting impossible COLD readings); r2 APPROVED.
+- **Law:** law 6 (a harness is reviewed before its numbers count) and law 4; none new.
+- **Gate:** test/reproof.judge.test.mjs (110 tests; the 13 C6 gates, 3 C5 rows and 3 r2 rows fail on the old harness
+  c20ee2d5) and test/reproof.cold.test.mjs (6 tests); DETERMINISTIC tier, `npm test`.
+- **Reopens with:** a wrapper or launcher that is not the outer's direct parent, or a busy-node source the PIDS line does
+  not name; the change must clear both test files above.
+
 ## C. Measurements (this package's own runs on ABGate.js)
 
 Placement: the U9D numbers below were measured on ABGate.js d4991c39 (frozen copy of HEAD 224bf19), so they are section C,
