@@ -31,7 +31,7 @@ const BANNED_NUMBERS = ['44.36', '5661', '1.81', '1.19', '0.0028'];   // D10 (pl
 const PRE_REG = ['0.98', '1.02', '0.95', '1.05', '1.04'];   // C-36 pre-registered decimals: the only ones a PENDING text may hold
 const SLOT = 'Hoisted-loop re-proof (C-23, STATISTICAL):';
 const SLOT_PENDING = SLOT + ' REQUIRED before 1.0 (C-23); PENDING, not yet run on this build; hosted dispatch PENDING.';
-const RE_PROOF = '# 0001\n\n## Re-proof\n\nREQUIRED before 1.0 (C-23); PENDING. PASS = median r in [0.98, 1.02], per-hold r in [0.95, 1.05]; mutant B x1.04.\n\n## Next\n\nx\n';
+const RE_PROOF = '# 0001\n\n## Re-proof\n\nREQUIRED before 1.0 (C-23); PENDING. pre-registered PASS = median r in [0.98, 1.02], per-hold r in [0.95, 1.05]; mutant B x1.04.\n\n## Next\n\nx\n';
 const FORBIDDEN_NAME = 'Kara' + 'djov';
 const RE_PAIR = new RegExp('re-?' + 'pair', 'i');
 const TAG_RE = new RegExp('<\\/?antml|antml:|<function_calls>|<function_results>|<\\/?invoke\\b|<\\/?parameter\\b|<\\/?system-reminder>', 'i');
@@ -115,9 +115,10 @@ const valueOf = (cell) => {
 };
 
 /** D14 rule on one text: PENDING with only pre-registered decimals, or a research/u9/ log holding every decimal (digit boundaries). */
+const VERDICT_RE = /\b(?:pass|fail|kill|invalid|verdict)/i;   // D14: any word starting with a verdict stem, any case (fails closed: failsafe also flags)
 function pendingProblems(name, text, W) {
     const dec = (text.replace('before 1.0', 'before').match(/(?<![\d.])\d+\.\d+(?!\d)/g)) || [];   // "before 1.0" is the release label, not a result
-    if (text.includes('PENDING') && (/\b(PASS|FAIL|KILL|INVALID)\b/.test(text.replace(/\bPASS = /g, '')) || /research\/u9\//.test(text))) return [name + ' is PENDING but claims a verdict or names a research/u9/ log'];   // r2 LITERAL: no verdict beside PENDING
+    if (text.includes('PENDING') && (VERDICT_RE.test(text.replace('pre-registered PASS = median r', '').replace(/must-fail/g, '')) || /research\/u9\//.test(text))) return [name + ' is PENDING but claims a verdict or names a research/u9/ log'];   // r2 LITERAL: no verdict beside PENDING
     if (text.includes('PENDING')) return dec.filter((d) => !PRE_REG.includes(d)).map((d) => name + ' is PENDING but quotes ' + d + ' (not pre-registered)');
     const pm = /research\/u9\/[A-Za-z0-9._\/-]*[A-Za-z0-9_]/.exec(text);
     if (pm === null) return [name + ' is neither PENDING nor names a research/u9/ log'];
@@ -496,6 +497,12 @@ const MUTANTS = [
     ['D14', 'slot says PASS r = 1.004 beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' PASS, median r = 1.004 on every lane; hosted dispatch PENDING.') })],
     ['D14', 'N1 slot says PASS, median r = 1.02 (pre-registered decimal + verdict word) beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' PASS, median r = 1.02 on every lane; hosted dispatch PENDING.') })],
     ['D14', 'N5 slot says PASS 5 of 5 holds (no decimal, verdict word) beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' PASS 5 of 5 holds; hosted dispatch PENDING.') })],
+    ['D14', 'N6 slot says Passed 5 of 5 holds beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' Passed 5 of 5 holds; hosted dispatch PENDING.') })],
+    ['D14', 'N7 slot says Verdict recorded on hold 2 beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' Verdict recorded on hold 2; hosted dispatch PENDING.') })],
+    ['D14', 'N8 slot says PASS = 5 of 5 holds beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' PASS = 5 of 5 holds; hosted dispatch PENDING.') })],
+    ['D14', 'N9 slot says result: Fail beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' result: Fail; hosted dispatch PENDING.') })],
+    ['D14', 'N10 slot says Killed on hold 2 beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' Killed on hold 2; hosted dispatch PENDING.') })],
+    ['D14', 'N11 slot says Invalidated on hold 2 beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' Invalidated on hold 2; hosted dispatch PENDING.') })],
     ['D14', '0001 Re-proof quotes PASS r = 1.004', (W) => ({ ...W, decisions: [['decisions/0001-hotloop.md', sub(W.decisions[0][1], 'mutant B x1.04.\n', 'mutant B x1.04.\n\nPASS: median r = 1.004\n')]] })],
     ['D15', 'reproof line without the quiet-lock prefix', (W) => ({ ...W, readme: sub(W.readme, 'node ~/.claude/hooks/quiet-lock.mjs run --strict "x" -- npm run reproof -- --hold 1', 'npm run reproof -- --hold 1') })],
     ['D15', 'verify calls selftest:timed', (W) => {
@@ -506,9 +513,9 @@ const MUTANTS = [
 ];
 
 // ---------------------------------------------------------------- rows
-test('self: 15 checks, 26 mutants, each check has a mutant', () => {
+test('self: 15 checks, 32 mutants, each check has a mutant', () => {
     assert.equal(IDS.length, 15);
-    assert.equal(MUTANTS.length, 26);
+    assert.equal(MUTANTS.length, 32);
     for (const id of IDS) assert.ok(MUTANTS.some((m) => m[0] === id), id + ' has no mutant');
 });
 
