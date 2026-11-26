@@ -24,10 +24,14 @@
 //
 // Exits (as ab-gate :59-64): 0 PASS | 3 FINDING | 2 NO VERDICT | 1 STOP (ORACLE, ANCHOR, CLI, FLAGS, CLASSIFIER, HARNESS)
 // or CRASH. `--oracle-only`: 0 = no VOID on a gated lane, 2 = a VOID on a gated lane. `--selftest`: 0 / 1.
-// VOID kinds per lane: SLOW-DEAD, AA-DRIFT, REPS-DRIFT, NOT-TF, ALLOC, GC-WINDOW, NAN, plus the lane's workFloor reason.
+// VOID kinds per lane: SLOW-DEAD, AA-DRIFT, REPS-DRIFT, NOT-TF, ALLOC, GC-WINDOW, NAN, TIER-SETTLE, plus the lane's workFloor
+// reason.
 // Rung E2 (C-23, Q-HOTLOOP (a)): the in-window loop is the TF-forced timedRounds (t0 / t1 in a Float64Array(2) slot),
 // armed once per timed run on 5 tool-owned dummy entries; not TF across a window = VOID NOT-TF (tool). Each timed lane
 // prints `WINDOW lane=<id> tool-bytes=<n> scavenges=<k>` (new-space bytes allocated in the window, net of the probe).
+// U9E (C-48 SETTLE): before its window each timed lane runs untimed settle passes at the timed shape inside the probe
+// until one reads exactly 0 B (cap 3) and prints `SETTLE lane=<id> passes=<1-3> pass-bytes=<b1>[,b2[,b3]] settled=<yes|no>`;
+// settled=no -> VOID TIER-SETTLE (the lane's single window still runs; nothing is re-run, C-7).
 // R1 fix round (law-11 review r1; maintainer rulings Q-REPS = (a), Q-WARM = (a)): a fifth column AB = A compiled fresh,
 // timed at B's reps when they differ from A's; Q-REPS-2 (re-ruled "judge both ratios"): word(B/AB) must equal word(B/A),
 // else VOID REPS-DRIFT; ab = AB / A is REPORTED, no band; equal reps print ab, B/AB, wordAB = n/a; K + 1 rounds per window with round 0 discarded from every column (printed on a WARM line); checkArr after every
@@ -100,6 +104,11 @@ const INJECTIONS = Object.freeze({   // ab-gate :142-151, the generic five
     // E2 (C-23): timedRounds deoptimized and pinned out of TF INSIDE the window (TF at its start, not at its end) -> the
     // window runs interpreted (WINDOW reads > 0 tool bytes) and the lane is VOID NOT-TF tool. Not in the selftest list.
     'tool-deopt': { want: 2, marker: /^VOID NOT-TF lane=\S+: NOT-TF tool timedRounds \(TF at window start (?:true|false), end (?:true|false)\)$/m, verdict: 'VERDICT NO VERDICT' },
+    // U9E (C-48, C-49): torture-only, like tool-deopt (not in the selftest list). no-settle skips the settle passes (the
+    // lane's tier-up bytes land in the window: WINDOW tool-bytes > 0); settle-void makes every settle pass allocate (an
+    // interpreted box), so the cap is hit -> VOID TIER-SETTLE, and the lane's single window still runs.
+    'no-settle': { want: 2, marker: /^SETTLE lane=\S+ skipped \(AB_GATE_INJECT=no-settle\)$/m, verdict: 'VERDICT NO VERDICT' },
+    'settle-void': { want: 2, marker: /^VOID TIER-SETTLE lane=\S+: TIER-SETTLE pass-bytes (?:-?\d+|NaN),(?:-?\d+|NaN),(?:-?\d+|NaN) \(cap 3, none read exactly 0\)$/m, verdict: 'VERDICT NO VERDICT' },
 });
 // untimed spec injection (selftest only): the lane file's gated map replaced by {} -> STOP HARNESS in loadSpec
 const SPEC_INJECT = 'empty-gated';
@@ -661,14 +670,15 @@ function oracleLane(ctx, L, cols, K) {
 // boxed t0, t1 and the ns quotient (census (b): 224 B per entry per round). The e.run call site is armed megamorphic on
 // tool-owned dummies (never a lane kernel), so no lane kernel is inlined into the loop.
 const T = new Float64Array(2);
+const PERF = performance;   // U9E (C-48): the clock object read once at import; timedRounds calls PERF.now() (no global lookup in the window)
 function timedRounds(live, N, starts, KR, n, L, tfBad, WARM) {
     for (let x = 0; x < KR; x++) {
         const st = starts[x];
         for (let y = 0; y < N; y++) {
             const e = live[(y + x) % N];
-            T[0] = performance.now();
+            T[0] = PERF.now();
             const got = e.run(e.state, st, n, e.reps);
-            T[1] = performance.now();
+            T[1] = PERF.now();
             if (got !== e.wants[x]) verifyRun(e, got, e.wants[x], L, 'timed');
             e.ns[x] = (T[1] - T[0]) * 1e6 / (n * e.reps);
         }
@@ -694,6 +704,17 @@ function windowProbe(fn) {
     for (const g of st) { if (!notMinor(g)) scavenges++; freed += usedNew(g.beforeGC) - usedNew(g.afterGC); }
     if (WIN[0] < 0 || WIN[1] < 0 || WIN[2] < 0 || WIN[3] < 0) return { bytes: NaN, scavenges };   // unmeasured, never 0
     return { bytes: (WIN[3] - WIN[2]) - (WIN[1] - WIN[0]) + freed, scavenges };
+}
+// U9E (C-48): the settle loop, pure. pass(i) runs at most TIER_SETTLE_CAP times, each read stored in SETTLE_PB[i]; the
+// first read that is exactly 0 settles (=== 0: NaN, negative and positive are not settled; -0 is 0). -> the number of
+// passes run when settled (1..3), 0 when the cap is hit (then SETTLE_PB holds all 3 reads).
+const TIER_SETTLE_CAP = 3;
+const SETTLE_PB = new Float64Array(TIER_SETTLE_CAP);
+function tierSettle(pass) {
+    for (let i = 0; i < TIER_SETTLE_CAP; i++) {
+        const b = pass(i); SETTLE_PB[i] = typeof b === 'number' ? b : NaN; if (b === 0) return i + 1;
+    }
+    return 0;
 }
 const ARM_N = 5, ARM_KR = 2, ARM_OPS = 8;
 /** Once per timed run: 5 tool-owned entries of the lane-entry shape (buildEntry's literal; state / data / one of
@@ -725,6 +746,21 @@ function armTimed(inject) {
     timedRounds(dummies, ARM_N, starts, ARM_KR, ARM_OPS >>> 1, L, tfBad, warm);
     forceOpt(timedRounds);
     timedRounds(dummies, ARM_N, starts, ARM_KR, ARM_OPS >>> 1, L, tfBad, warm);
+    // U9E (C-48): pre-tier the probe pair before any lane: newSpaceUsed and windowProbe prepared, 2 rounds over 5 nonce'd
+    // closures (the fn() call site goes megamorphic, so no lane closure is inlined into the probe), then forced to TF
+    // (newSpaceUsed by its own call: a TF windowProbe may inline it); either not TF -> STOP CLASSIFIER
+    const probes = [];
+    for (let i = 0; i < ARM_N; i++) probes.push(new Function('"use strict"; // ab-gate tool-probe #' + (NONCE++) + '\nreturn function probe() { return ' + i + '; };')());
+    prep(newSpaceUsed);
+    prep(windowProbe);
+    for (let r = 0; r < 2; r++) for (const p of probes) windowProbe(p);
+    forceOpt(newSpaceUsed);
+    newSpaceUsed();
+    forceOpt(windowProbe);
+    windowProbe(probes[0]);
+    if ((optStatus(newSpaceUsed) & TF_BIT) === 0 || (optStatus(windowProbe) & TF_BIT) === 0) {
+        stop('CLASSIFIER', 'armTimed: probe pair not TF after the pre-tier (newSpaceUsed ' + optStatus(newSpaceUsed) + ', windowProbe ' + optStatus(windowProbe) + ')');
+    }
     for (let i = 0; i < 4; i++) windowProbe(() => {});
 }
 
@@ -762,7 +798,21 @@ async function runLane(ctx, L, cols, K, inject) {
         e.wants = new Int32Array(KR);
         for (let x = 0; x < KR; x++) e.wants[x] = foldWant(L, starts[x], n, e.reps);
     }
+    // U9E (C-48): untimed settle passes at the timed shape (the same live / starts / KR / n / L; a scratch tfBad and warm,
+    // never the window's) inside windowProbe, before the window and before any VOID; cold path, once per lane
+    let settleVoid = null;
+    if (inject === 'no-settle') say(ctx, 'SETTLE lane=' + L.id + ' skipped (' + INJECT_ENV + '=no-settle)');
+    else {
+        const sBad = new Uint8Array(live.length), sWarm = new Int32Array(1);
+        const sBox = inject === 'settle-void' ? new Function('"use strict"; const f = function settleBox() { return [0.5, 1.5]; }; %NeverOptimizeFunction(f); return f;')() : null;
+        const passes = tierSettle(() => windowProbe(() => { timedRounds(live, live.length, starts, KR, n, L, sBad, sWarm); if (sBox !== null) sBox(); }).bytes);
+        const used = passes === 0 ? TIER_SETTLE_CAP : passes;
+        const pb = Array.from(SETTLE_PB.subarray(0, used), String).join(',');
+        say(ctx, 'SETTLE lane=' + L.id + ' passes=' + used + ' pass-bytes=' + pb + ' settled=' + (passes === 0 ? 'no' : 'yes'));
+        if (passes === 0) settleVoid = 'TIER-SETTLE pass-bytes ' + pb + ' (cap ' + TIER_SETTLE_CAP + ', none read exactly 0)';
+    }
     const voids = [];
+    if (settleVoid !== null) voids.push(settleVoid);
     const fr = floorReason(L, starts, n);
     if (fr !== null) voids.push(fr);
     const tierStart = live.map((e) => (optStatus(e.run) & TF_BIT) !== 0);
@@ -1503,10 +1553,12 @@ const FROZEN_ONLY_TAIL = ' ok; live not bound (frozen only)';
 const preClock = (out) => !/^(HEADER rung=|PROV start |CONTROL gc-window|WINDOW lane=)/m.test(out);
 const JUDGE_ROWS = 59;         // plan-GB A2: 58 verdictOf rows on the tool-owned spec + the empty-gated belt row
 const SELFTEST_UNTIMED = 5 + JUDGE_ROWS + 3;   // plan-GB A4 = 67: replay, allocRow, empty-gated, live-drift, frozen-drift, 59 judge, 3 consumer
-/** U8 (C-37, extends C-21 to real output): pure, cold path. Every line of a child's output `out` is tested ALONE against
- *  every INJECTIONS marker (a line holds no '\n', so the /m flag cannot widen ^ / $ past it; the markers are non-global,
- *  so no lastIndex state). Returns '' when no line is matched by >= 2 markers, else one 'marker clash ...' clause per
- *  such line, naming the markers and the line (cut at 460 chars). The timed loop folds it into the row's `extra`. */
+/** U8 (C-37, extends C-21 to real output): pure, cold path. Every line of a child's output `out` (split on '\n' only) is
+ *  tested ALONE against every INJECTIONS marker (the markers are non-global, so no lastIndex state). JS /m also ends a
+ *  line at \r, U+2028 and U+2029, so ^ / $ can match inside such a piece: a marker matching there counts as a hit on the
+ *  whole piece, and a clash there fails the row closed. Returns '' when no piece is matched by >= 2 markers, else one
+ *  'marker clash ...' clause per such piece, naming the markers and the piece (cut at 460 chars). The timed loop and the
+ *  untimed live-drift / frozen-drift child rows (C-58) fold it into the row the same way. */
 function markerClash(out) {
     const names = Object.keys(INJECTIONS);
     let desc = '';
@@ -1566,8 +1618,10 @@ function selftest(ctx, untimedOnly) {
         const sp = INJECTIONS['live-drift'];
         const r = child(ctx, ['--run', runId, '--K', '3'], envWith('live-drift'), undefined);
         const has = sp.marker.test(r.out), pre = preClock(r.out);
-        const ok = r.status === sp.want && has && pre && r.vline !== null && r.vline.startsWith(sp.verdict);
-        row(ok, 'live-drift ' + runId + ': exit ' + r.status + ' (want ' + sp.want + ') marker ' + String(sp.marker) + ' ' + (has ? 'present' : 'ABSENT') +
+        // C-58: the same markerClash fold as the timed loop (no new row: counts unchanged)
+        const clash = markerClash(r.out), extra = clash === '' ? '' : clash + ';';
+        const ok = r.status === sp.want && has && extra === '' && pre && r.vline !== null && r.vline.startsWith(sp.verdict);
+        row(ok, 'live-drift ' + runId + ': exit ' + r.status + ' (want ' + sp.want + ') marker ' + String(sp.marker) + ' ' + (has ? 'present' : 'ABSENT') + extra +
             (pre ? ', stopped before the clock' : ', REACHED THE CLOCK') + ' verdict ' + (r.vline === null ? '(' + r.nV + ' VERDICT lines)' : JSON.stringify(r.vline.slice(0, 160))) +
             ' (want ' + JSON.stringify(sp.verdict) + ')', ok ? null : r.out);
     } else {
@@ -1579,8 +1633,10 @@ function selftest(ctx, untimedOnly) {
     const fd = child(ctx, ['--run', runId, '--K', '3'], envWith('frozen-drift'), undefined);
     const fdHas = fdSp.marker.test(fd.out), fdPre = preClock(fd.out);
     const fdNames = fd.out.includes('STOP ANCHOR: frozen-sha ' + f0.frozen + ' sha256 ') && fd.out.includes(' (want ' + f0.sha256.slice(0, 8) + ')');
-    const fdOk = fd.status === fdSp.want && fdHas && fdNames && fdPre && fd.vline !== null && fd.vline.startsWith(fdSp.verdict);
-    row(fdOk, 'frozen-drift ' + f0.frozen + ': exit ' + fd.status + ' (want ' + fdSp.want + ') marker ' + String(fdSp.marker) + ' ' + (fdHas ? 'present' : 'ABSENT') +
+    // C-58: the same markerClash fold as the timed loop (no new row: counts unchanged)
+    const fdClash = markerClash(fd.out), fdExtra = fdClash === '' ? '' : fdClash + ';';
+    const fdOk = fd.status === fdSp.want && fdHas && fdExtra === '' && fdNames && fdPre && fd.vline !== null && fd.vline.startsWith(fdSp.verdict);
+    row(fdOk, 'frozen-drift ' + f0.frozen + ': exit ' + fd.status + ' (want ' + fdSp.want + ') marker ' + String(fdSp.marker) + ' ' + (fdHas ? 'present' : 'ABSENT') + fdExtra +
         (fdNames ? '' : ', the STOP does not name ' + f0.frozen + ' (want ' + f0.sha256.slice(0, 8) + ')') + (fdPre ? ', stopped before the clock' : ', REACHED THE CLOCK') +
         ' verdict ' + (fd.vline === null ? '(' + fd.nV + ' VERDICT lines)' : JSON.stringify(fd.vline.slice(0, 160))) + ' (want ' + JSON.stringify(fdSp.verdict) + ')', fdOk ? null : fd.out);
     // (6) the judge rows on the tool-owned spec, in-process (verdictOf is pure)

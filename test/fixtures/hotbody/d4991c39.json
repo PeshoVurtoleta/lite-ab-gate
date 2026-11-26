@@ -1,0 +1,40 @@
+{
+  "note": "U9E B1 TASK 0 (plan-U9E-v1 A1, SPEC C-48): the hot-body slices of ABGate.js d4991c39 (frozen pre-J1b2-224bf19), byte-identical in HEAD 0b37af7 (sha256 2ffb7147). timedRounds is the golden for the PERF hoist (live text with PERF.now() -> performance.now() must equal it); every other slice must appear byte-identical exactly once.",
+  "from": {
+    "frozen": {
+      "file": "ABGate.js",
+      "sha256": "d4991c39294d535b5f4464b42fd826ef72c5cf7ccd0a98769aec5715d3fd710d"
+    },
+    "head": {
+      "commit": "0b37af7",
+      "sha256": "2ffb7147228924946262db8dfdaf15bc405cfa8b2ca58e96e75f8640a435d027"
+    }
+  },
+  "slices": [
+    {
+      "name": "windowProbe",
+      "sha256": "1d291f51120f866567c257534764752d21f8250e19e44569983d0225f1807853",
+      "text": "const WIN = new Float64Array(4);\nconst usedNew = (h) => { for (const s of h.heapSpaceStatistics) if (s.spaceName === 'new_space') return s.spaceUsedSize; return NaN; };\nfunction windowProbe(fn) {\n    WIN[0] = newSpaceUsed();\n    WIN[1] = newSpaceUsed();\n    const q = new GCProfiler();\n    q.start();\n    WIN[2] = newSpaceUsed();\n    try { fn(); } catch (e) { q.stop(); throw e; }   // a STOP inside the window never leaves this profiler running\n    WIN[3] = newSpaceUsed();\n    const st = q.stop().statistics;\n    let freed = 0, scavenges = 0;\n    for (const g of st) { if (!notMinor(g)) scavenges++; freed += usedNew(g.beforeGC) - usedNew(g.afterGC); }\n    if (WIN[0] < 0 || WIN[1] < 0 || WIN[2] < 0 || WIN[3] < 0) return { bytes: NaN, scavenges };   // unmeasured, never 0\n    return { bytes: (WIN[3] - WIN[2]) - (WIN[1] - WIN[0]) + freed, scavenges };\n}\n"
+    },
+    {
+      "name": "newSpaceUsed",
+      "sha256": "60992a9a40f965f8b4893a211f0f40ae925b14756001a9609174735fb287b0d4",
+      "text": "function newSpaceUsed() {\n    for (const s of getHeapSpaceStatistics()) if (s.space_name === 'new_space') return s.space_used_size;\n    return -1;\n}\n"
+    },
+    {
+      "name": "gcWindow",
+      "sha256": "aa0a5ef53fe3e9eeee2ba2716b9461eed63b0371ef76adfd727fbd1d98a5078a",
+      "text": "async function gcWindow(fn) {\n    globalThis.gc();\n    await settle(50);\n    const p = new GCProfiler();\n    p.start();\n    fn();\n    await settle(50);\n    const st = p.stop().statistics;\n    return { major: st.filter(notMinor).length, all: st.length };\n}\n"
+    },
+    {
+      "name": "timedRounds",
+      "sha256": "cac70320451e4927a1d5c4214d62d2342125fb0eb943b6dabdb7567987a85892",
+      "text": "function timedRounds(live, N, starts, KR, n, L, tfBad, WARM) {\n    for (let x = 0; x < KR; x++) {\n        const st = starts[x];\n        for (let y = 0; y < N; y++) {\n            const e = live[(y + x) % N];\n            T[0] = performance.now();\n            const got = e.run(e.state, st, n, e.reps);\n            T[1] = performance.now();\n            if (got !== e.wants[x]) verifyRun(e, got, e.wants[x], L, 'timed');\n            e.ns[x] = (T[1] - T[0]) * 1e6 / (n * e.reps);\n        }\n        if (x === 0) WARM[0] = 0;\n        for (let y = 0; y < N; y++) if ((optStatus(live[y].run) & TF_BIT) === 0) tfBad[y] = 1;\n    }\n}\n"
+    },
+    {
+      "name": "runLane.gcWindow",
+      "sha256": "24ed967b9191c7487a7a94891e4a73434c75cb397b436e6a662e65efc3ae661b",
+      "text": "    const w = await gcWindow(() => { win = windowProbe(() => { if (toolDeopt !== null) toolDeopt(timedRounds); timedRounds(live, N, starts, KR, n, L, tfBad, WARM); }); });\n"
+    }
+  ]
+}

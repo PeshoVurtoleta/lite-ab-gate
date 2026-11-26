@@ -199,6 +199,8 @@ const SYNTH = {
     'warm-skew': 'WARM lane=jl:clean round 0 (discarded, not in any median) A/A=1.0000 B/A=0.9981 AA/A=1.9124 SLOW/A=2.4410',
     'arr-bend': 'STOP ORACLE: jl:clean B#1 data.x (after warm) differs from the lane data at byte 1023',
     'tool-deopt': 'VOID NOT-TF lane=jl:clean: NOT-TF tool timedRounds (TF at window start true, end false)',
+    'no-settle': 'SETTLE lane=jl:clean skipped (AB_GATE_INJECT=no-settle)',
+    'settle-void': 'VOID TIER-SETTLE lane=jl:clean: TIER-SETTLE pass-bytes 64,64,64 (cap 3, none read exactly 0)',
 };
 const PINS = [
     "say(ctx, e instanceof Stop ? 'STOP ' + e.reason + ': ' + e.message",
@@ -211,6 +213,8 @@ const PINS = [
     "voids.push('REPS-DRIFT B/AB ' + fmtS(bab, 3) + ' reads ' + wordAB + ' but B/A ' + fmtS(ratio, 3) + ' reads ' + word(ratio) + ' (AB = A at B\\'s reps ' + repsB + ' vs A\\'s ' + reps + ')')",
     "'WARM lane=' + L.id + ' round 0 (discarded, not in any median) ' + liveCols.map((c) => c.id + '/A=' + fmt(warm0[c.id] / warm0.A, 4)).join(' ')",
     "voids.push('NOT-TF tool timedRounds (TF at window start ' + toolTfStart + ', end ' + toolTfEnd + ')')",
+    "say(ctx, 'SETTLE lane=' + L.id + ' skipped (' + INJECT_ENV + '=no-settle)')",
+    "settleVoid = 'TIER-SETTLE pass-bytes ' + pb + ' (cap ' + TIER_SETTLE_CAP + ', none read exactly 0)'",
 ];
 // Lines other failures (or clean runs) print: no marker may match any of them
 const OTHERS = [
@@ -232,9 +236,9 @@ const OTHERS = [
     'SELFTEST   STOP ANCHOR: frozen-sha frozen/k.js sha256 12345678 (want 2a83d841)',
     'SELFTEST   WARM lane=jl:clean round 0 (discarded, not in any median) A/A=1.0000 B/A=0.9981 AA/A=1.9124 SLOW/A=2.4410',
 ];
-const NAMES = ['bent-oracle', 'boxed', 'slow-dead', 'aa-drift', 'live-drift', 'frozen-drift', 'late-bend', 'post-bend', 'ab-drift', 'warm-skew', 'arr-bend', 'tool-deopt'];
+const NAMES = ['bent-oracle', 'boxed', 'slow-dead', 'aa-drift', 'live-drift', 'frozen-drift', 'late-bend', 'post-bend', 'ab-drift', 'warm-skew', 'arr-bend', 'tool-deopt', 'no-settle', 'settle-void'];
 
-test('marker gate (C-21): each of the 12 INJECTIONS markers is an anchored RegExp matching only its own rendered message; must-fail controls rejected', () => {
+test('marker gate (C-21): each of the 14 INJECTIONS markers is an anchored RegExp matching only its own rendered message; must-fail controls rejected', () => {
     const src = readFileSync(ABGATE, 'utf8');
     for (const p of PINS) assert.ok(src.includes(p), 'message template no longer in ABGate.js: ' + p);
     const table = injectionsOf(src);

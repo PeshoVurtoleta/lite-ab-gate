@@ -301,6 +301,17 @@ test('buildMutant aborts unless the anchor matches exactly once', () => {
     assert.throws(() => buildMutant(TR + '\n' + TR.split('\n')[9]), /matched 2 times/);
     assert.throws(() => buildMutant(TR.replace('T[1] = performance.now();', 'T[1] = Date.now();')), /T\[1\] clock read not unique/);
 });
+test('C-61: buildMutant accepts exactly one T[1] clock read in either form (performance.now / PERF.now); 2 hits throw (must-fail)', () => {
+    const perf = TR.replace('T[0] = performance.now();', 'T[0] = PERF.now();').replace('T[1] = performance.now();', 'T[1] = PERF.now();');
+    assert.equal(perf.split('PERF.now()').length, 3);
+    assert.equal(perf.split('performance').length, 1);
+    for (const g of [TR, perf]) {
+        const ml = buildMutant(g).split('\n'), gl = g.split('\n');
+        assert.deepEqual(gl.map((l, i) => (l === ml[i] ? -1 : i)).filter((i) => i >= 0), [9]);
+    }
+    assert.throws(() => buildMutant(TR + '\n            T[1] = PERF.now();'), /T\[1\] clock read not unique/);
+    assert.throws(() => buildMutant(perf + '\n            T[1] = PERF.now();'), /T\[1\] clock read not unique/);
+});
 test('the live ABGate.js still carries exactly one mutant anchor (U9 B2 builds M from the RC)', () => {
     const live = readFileSync(join(ROOT, 'ABGate.js'), 'utf8');
     const ml = buildMutant(live).split('\n'), gl = live.split('\n');

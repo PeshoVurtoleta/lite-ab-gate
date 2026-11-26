@@ -450,15 +450,17 @@ export function judgeHolds(holds, opts = {}) {
 
 // ---------------------------------------------------------------- mutant (TASK 3)
 const MUT_LINE = /^([ \t]*)e\.ns\[x\] = \(T\[1\] - T\[0\]\) \* 1e6 \/ \(n \* e\.reps\);$/gm;
-/** buildMutant(G text) -> M text: the timedRounds ns write (the line after `T[1] = performance.now();`) REPLACED by the
+const T1_READ = /T\[1\] = (?:PERF|performance)\.now\(\);/g;
+/** buildMutant(G text) -> M text: the timedRounds ns write (the line after the `T[1]` clock read) REPLACED by the
  *  same write x (e.col === 'B' ? MUT : 1) -- one line differs, line count unchanged. Branch-free on purpose: the
  *  calibration hold (U9 B1) showed an inserted `if (e.col === 'B') e.ns[x] *= 1.04;` is never reached while the tool
  *  arms timedRounds on its dummies, so TF compiles it as a deopt point and every M lane read VOID NOT-TF tool.
- *  Throws unless the anchor matches exactly once and `T[1] = performance.now();` is unique. */
+ *  Throws unless the anchor matches exactly once and the `T[1]` clock read is unique: C-61 accepts both forms,
+ *  `T[1] = performance.now();` (G up to 0b37af7) and `T[1] = PERF.now();` (U9E, C-48), exactly ONE match of either. */
 export function buildMutant(text) {
     const hits = [...String(text).matchAll(MUT_LINE)];
     if (hits.length !== 1) throw new Error('buildMutant: anchor matched ' + hits.length + ' times (want exactly 1)');
-    if (String(text).split('T[1] = performance.now();').length !== 2) throw new Error('buildMutant: T[1] clock read not unique');
+    if ([...String(text).matchAll(T1_READ)].length !== 1) throw new Error('buildMutant: T[1] clock read not unique');
     const h = hits[0];
     const line = h[1] + "e.ns[x] = (T[1] - T[0]) * 1e6 / (n * e.reps) * (e.col === 'B' ? " + MUT + ' : 1);   // U9 mutant M (bench/reproof.mjs buildMutant)';
     return text.slice(0, h.index) + line + text.slice(h.index + h[0].length);
