@@ -494,6 +494,8 @@ const MUTANTS = [
     ['D13', 'STOP HARNESS: spec: bullet deleted', (W) => ({ ...W, readme: sub(W.readme, '- A refusal prints STOP HARNESS: spec: <lane>.workFloor(...)\n', '') })],
     ['D14', 'r = 1.004, no log', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' r = 1.004') })],
     ['D14', 'slot says PASS r = 1.004 beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' PASS, median r = 1.004 on every lane; hosted dispatch PENDING.') })],
+    ['D14', 'N1 slot says PASS, median r = 1.02 (pre-registered decimal + verdict word) beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' PASS, median r = 1.02 on every lane; hosted dispatch PENDING.') })],
+    ['D14', 'N5 slot says PASS 5 of 5 holds (no decimal, verdict word) beside PENDING', (W) => ({ ...W, readme: sub(W.readme, SLOT_PENDING, SLOT + ' PASS 5 of 5 holds; hosted dispatch PENDING.') })],
     ['D14', '0001 Re-proof quotes PASS r = 1.004', (W) => ({ ...W, decisions: [['decisions/0001-hotloop.md', sub(W.decisions[0][1], 'mutant B x1.04.\n', 'mutant B x1.04.\n\nPASS: median r = 1.004\n')]] })],
     ['D15', 'reproof line without the quiet-lock prefix', (W) => ({ ...W, readme: sub(W.readme, 'node ~/.claude/hooks/quiet-lock.mjs run --strict "x" -- npm run reproof -- --hold 1', 'npm run reproof -- --hold 1') })],
     ['D15', 'verify calls selftest:timed', (W) => {
@@ -504,9 +506,9 @@ const MUTANTS = [
 ];
 
 // ---------------------------------------------------------------- rows
-test('self: 15 checks, 24 mutants, each check has a mutant', () => {
+test('self: 15 checks, 26 mutants, each check has a mutant', () => {
     assert.equal(IDS.length, 15);
-    assert.equal(MUTANTS.length, 24);
+    assert.equal(MUTANTS.length, 26);
     for (const id of IDS) assert.ok(MUTANTS.some((m) => m[0] === id), id + ' has no mutant');
 });
 
