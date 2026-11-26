@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `test/docs.template.test.mjs` pins ci.yml's jobs to exactly `test`, that job's key set and its `runs-on` (`${{ matrix.os }}`), quoted keys included; 86 docs.template mutants after FILL8 (C-63).
 - `test/selftest.timed.mjs` (timed harness, outside `npm test`, run under `quiet-lock --strict`) and `test/fixtures/timed-real/lines.json` + `surface.mjs`; `test/selftest.untimed.test.mjs` gains 6 rows: 3 gate the fixture (schema + lock provenance, marker gate on real lines, staleness), 3 slice ABGate.js (markerClash on all 14 own lines, the C-60 G1 timed-loop fold + VOID replay, the C-58 untimed fold) in `npm test` (C-38, C-60).
 - `test/reproof.cold.test.mjs` (6 rows) + 18 judge rows in `test/reproof.judge.test.mjs` (C-67).
+- `test/docs.template.test.mjs` pins ci.yml's top-level key set (name, on, permissions, concurrency, defaults, jobs; quoted keys normalized, no top-level `env`) and its `defaults:` block byte-exact; 96 docs.template mutants after FILL9 (M87..M96, each caught by the citop row alone), 125 tests in the file (C-64).
+- `test/docs.test.mjs` D14 matches verdict words case-insensitively by stem (`/\b(?:pass|fail|kill|invalid|verdict)/i`); only the exact `pre-registered PASS = median r` and `must-fail` are exempt; mutants N6-N11 (Passed, Verdict, PASS =, Fail, Killed, Invalidated); docs.test 45 -> 51 tests (FILL-D14b).
 
 ### Changed
 

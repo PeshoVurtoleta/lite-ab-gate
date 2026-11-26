@@ -201,9 +201,9 @@ reconciliations, C-46 records E1 behaviour (U3 review r1, A3), and C-60 records 
 - C-63 CIJOBKEYS (Q-CIJOBKEYS (a) "Pin ci.yml jobs", A28): ci.yml jobs exactly `test`, a literal JOB_KEYS_CI key set
   (quoted keys normalized), exact runs-on, mutants for quoted job-level continue-on-error / if: false. Implementing unit: FILL8.
 - C-64 CITOPKEYS (Q-CITOPKEYS (a) "Allowlist + exact defaults", A29): ci.yml top-level keys exactly name, on, permissions,
-  concurrency, defaults, jobs (quoted keys normalized, no top-level env), defaults block byte-exact. Implementing unit: FILL9.
+  concurrency, defaults, jobs (quoted keys normalized, no top-level env), defaults block byte-exact. IMPLEMENTED burst 12 (FILL9); LEDGER B2 remainder closed.
 
-Open maintainer questions: none.
+Open maintainer questions: Q-U9-COLDMIN (LEDGER B18): (a) minimum dwell, (b) exempt the PIDS outer + parent from child PROV busy lists, (c) both, (d) leave U9 PENDING; no ruling.
 
 ## 3. Program units (from the SPEC program-order table)
 

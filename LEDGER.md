@@ -254,10 +254,10 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   asserts a test-file floor.
 - **Reopens with:** a test glob or runner change that again lets an empty run pass.
 
-### B2. Fail-closed workflow steps were checked by presence only, so `continue-on-error` / `|| true` / `set +e` / `|| echo` slipped through *(FOUND 2026-11-25, G-C B2 review r1 / r2; FIXED r3; REOPENED 2026-11-26 by FILL5 retry r3 probe P99, ruled C-57; FIXED 2026-11-26 burst 10 (FILL7, C-57))*
+### B2. Fail-closed workflow steps were checked by presence only, so `continue-on-error` / `|| true` / `set +e` / `|| echo` slipped through *(FOUND 2026-11-25, G-C B2 review r1 / r2; FIXED r3; REOPENED 2026-11-26 by FILL5 retry r3 probe P99, ruled C-57; FIXED 2026-11-26 burst 10 (FILL7, C-57); remainder (top-level keys + defaults block) FIXED burst 12 (FILL9, C-64))*
 - **What happened:** the docs.template test for templates/ab.yml and the ci.yml check asserted that the fail-closed
   steps were present. Review r1 REJECTED 2 LITERAL findings (presence-only fail-closed checks; ci concurrency on
-  main); r2 REJECTED 1 LITERAL (`|| echo` and `set +eo` still slipped); r3 APPROVED. The suite was then 13 checks / 60 mutants (FILL7 since: 71, see Gate) (M1..M60; was 37 at FILL3: U8 B3 added stopgate + M30..M33, FILL3 added M34..M37, the FILL5 retry added M38..M60; .handoff/COMMIT_MSG-U8B3.txt, COMMIT_MSG-FILL3.txt, B13).
+  main); r2 REJECTED 1 LITERAL (`|| echo` and `set +eo` still slipped); r3 APPROVED. The suite was then 13 checks / 60 mutants (now 13 checks / 96 mutants (M1..M96), see Gate) (M1..M60; was 37 at FILL3: U8 B3 added stopgate + M30..M33, FILL3 added M34..M37, the FILL5 retry added M38..M60; .handoff/COMMIT_MSG-U8B3.txt, COMMIT_MSG-FILL3.txt, B13).
 - **Root cause:** a check that a step exists does not see a neutralizer attached to it (`continue-on-error`, `|| true`,
   `set +e`, `|| echo`); the check passed on a workflow whose failure could not fail the job.
 - **Evidence:** .handoff/HISTORY.md (burst 3, G-C B2); .handoff/evidence/U4-GCB2-docs-template.log,
@@ -271,7 +271,10 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   normalized), runs-on exact; quoted job-level `"continue-on-error": true` / `"if": false` now caught; 13 checks /
   86 mutants (M72..M86), 113 tests in the file. Open remainder (FILL8 review): ci.yml has no top-level key allowlist
   and no exact `defaults:` block -- a top-level `env: NODE_OPTIONS: --test-only` (measured: tests 1, pass 1, exit 0)
-  and a quoted `"shell": bash -c true {0}` under defaults pass every check; ruled C-64, implementing unit FILL9.
+  and a quoted `"shell": bash -c true {0}` under defaults pass every check; ruled C-64. FIXED burst 12 (FILL9, C-64):
+  ci.yml top-level key set pinned (name, on, permissions, concurrency, defaults, jobs; quoted keys normalized) and the
+  defaults block byte-exact; now 13 checks / 96 mutants (M1..M96), M87..M96 each caught by the citop row alone, 125
+  tests in the file (counted from test/docs.template.test.mjs: 96 mutant rows M1..M96, 125 tests by `node --test`).
 - **Reopens with:** a new way to neutralize a step's exit status that no mutant covers.
 
 ### B3. A d.ts gate outside the `npm test` glob and a test that skips when tsc is absent were vacuous passes *(FOUND 2026-11-25, G-A B3 review r1; FIXED r2)*
@@ -449,9 +452,9 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   rows match unquoted keys only); ruled C-57 (A20, Q-STEPKEYS (a): pin every step's key set), implementing unit FILL7.
   Lesson (r3): a YAML line model fails open wherever YAML's grammar is wider than the model (quoted keys, CR / NEL,
   comments); pin exact key sets and bytes rather than deny-listing forms.
-- **Gate:** test/docs.template.test.mjs 6edd3c6f: 13 checks, 60 mutants (M1..M60), 80 tests in the file, 5 controls (3 from FILL5: :624, :634, :643); npm test
+- **Gate:** test/docs.template.test.mjs 6edd3c6f: 13 checks, 60 mutants (M1..M60; 96 since FILL9), 80 tests in the file, 5 controls (3 from FILL5: :624, :634, :643); npm test
   542 / 542 on HEAD + that file (.handoff/overlay-FILL5b/npm-test-head-r2.log). M55..M60 each fail exactly the failclosed
-  check (REVIEW-r3b.md). The "13 checks / 37 mutants" count in B2 above is updated to 60.
+  check (REVIEW-r3b.md). The "13 checks / 37 mutants" count in B2 above is updated (60 here; 96 after FILL9, see B2).
 - **Evidence (fix):** .handoff/overlay-FILL5b/REVIEW-r3.md, REVIEW-r3b.md (r1 / r2 text: REVIEW-r1r2.md).
 - **Reopens with:** a sixth route to ImageOS ahead of the guard reopens it.
 
@@ -521,7 +524,7 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   gaps (uncapped ladder, sweep format check, format regex) -> r2 APPROVED.
 - **Reopens with:** a tool VOID kind emitted outside TOOL_VOID_KINDS (R7 reads only pushes whose first literal is a single-quoted kind followed by a space, `voids.push('KIND ...`, concatenated or not; a kind followed by a colon (`'ZZZ: ' + x`), a double-quoted string, a template literal or a variable is a known gap, FILLER).
 
-### B17. The self-busy launcher: the re-proof harness's busy-node rule skipped only its own pid, so both calibration holds read busy-node INVALID at 1-G start *(FOUND 2026-11-26 burst 11, U9 calibration holds; RULED C-67 / SPEC A32, A33, A34; status: FIXED in the tree by U9A2, burst 12, commit pending; re-run calibration hold 0 PENDING, quiet lock BUSY)*
+### B17. The self-busy launcher: the re-proof harness's busy-node rule skipped only its own pid, so both calibration holds read busy-node INVALID at 1-G start *(FOUND 2026-11-26 burst 11, U9 calibration holds; RULED C-67 / SPEC A32, A33, A34; status: FIXED in the tree by U9A2, burst 12, commit pending; re-run calibration hold 0 ran burst 13: INVALID on the PIDS outer itself, see B18 (OPEN))*
 - **What happened:** `bench/reproof.mjs` `busyNodes` and the child PROV busy list skipped only their own pid. Both
   calibration holds read busy-node INVALID at `1-G start`. C-67 (A32) attributes this to a launcher node process (the
   quiet-lock wrapper, the outer's parent). Neither harness wrote a PIDS line, so no pid is confirmed. 311761f (2026-11-25,
@@ -532,20 +535,41 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   calA.log names it as the only reason.
 - **Root cause:** the busy-node rule excluded one pid (its own), not the launcher above it. A launcher node process can read
   >= 10% CPU while it spawns, so a quiet host looked busy at the first child. The C-67 fix settles BOTH the outer's own pid
-  and its parent before child 1, so either candidate for the unlogged pid is covered; the new PIDS line names it from now on.
+  and its parent before child 1, intended to cover either candidate for the unlogged pid (the outer was not covered: B18); the new PIDS line names it from now on.
 - **Evidence:** .handoff/evidence/U9-cal/hold-0/outer.log, 1-G.log; .handoff/evidence/U9-cal-b418c3a/hold-0/outer.log, 1-G.log;
   .handoff/evidence/U9-B2/calA.log; SPEC C-67 (A32 ruling, A33 / A34 planner + review choices).
 - **Fix (U9A2):** before child 1 the outer polls `ps` until its own pid and its parent both read < 10% CPU (COLD: max 10,
   500 ms, cap 60 polls) and writes `PIDS outer=<pid> parent=<ppid>` and `COLD ... settled=yes|no` to outer.log. The
   judge's busy-node rule is unchanged. COLD `settled=no` at the cap -> INVALID; an impossible COLD line -> STOP. SETTLE /
-  WINDOW grammar defects in a G / M log now STOP (review m7 / m8 survivors): a malformed WINDOW line was already STOP at
-  HEAD, the only WINDOW change is non-numeric tool-bytes KILL -> STOP; any SETTLE line in a P log -> STOP. Review r1 REJECTED 4 LITERAL (missing
-  controls, one fail-open accepting impossible COLD readings); r2 APPROVED.
+  WINDOW grammar defects in a G / M log now STOP; any SETTLE line in a P log -> STOP (m7 / m8 survivors, named in
+  plan-U9A2-v1; no review artifact). A malformed WINDOW line was already STOP at a9a81a5, the only WINDOW change is
+  non-numeric tool-bytes KILL -> STOP. Review r1 REJECTED 4 LITERAL (missing controls, one fail-open accepting
+  impossible COLD readings); r2 APPROVED.
 - **Law:** law 6 (a harness is reviewed before its numbers count) and law 4; none new.
 - **Gate:** test/reproof.judge.test.mjs (110 tests; the 13 C6 gates, 3 C5 rows and 3 r2 rows fail on the old harness
   c20ee2d5) and test/reproof.cold.test.mjs (6 tests); DETERMINISTIC tier, `npm test`.
 - **Reopens with:** a wrapper or launcher that is not the outer's direct parent, or a busy-node source the PIDS line does
   not name; the change must clear both test files above.
+
+### B18. The C-67 cold settle accepted a first-sample ps reading of 0.0 for the outer, so the outer's own start-up burst read busy-node at child 1 *(FOUND 2026-11-26 burst 13, U9A2 calibration hold 0; status: OPEN, maintainer question Q-U9-COLDMIN)*
+- **What happened:** U9A2 calibration hold 0 (b418c3a / ABGate.js 1d4d4255, harness bench/reproof.mjs 396542ec,
+  2026-11-26 09:43-09:47Z, load1 1.46, baseline 2.34, QUIET, Node v26.8.2, not counted). outer.log:
+  `PIDS outer=89404 parent=89397`, `COLD polls=1 cap=60 interval-ms=500 outer=0 parent=8.5 settled=yes`. The hold exited 2
+  INVALID: `JUDGE invalid 1-G start busy-node [11.8 89404 node]` -- the busy pid is the PIDS outer itself. Every other PROV
+  list was empty; children exited 0; 3-M VOID 0, G tool-bytes 0 on 6 / 6, 9 SETTLE lines settled=yes.
+- **Root cause:** a macOS ps pcpu reading is a decayed average, and a process with no history reads 0.0. REPORTED probe (1 run):
+  macOS ps pcpu of a node process 10 ms old reads 0.0; after a 300 ms burst it reads 66.5 at 311 ms, 12.6 at 824 ms, 2.2 at
+  1341 ms, 0.5 at 1849 ms, <= 0.2 from ~3 s. The C-67 cold settle accepted the first-sample 0.0 for the outer at poll 1,
+  and child 1's PROV read the outer at 11.8 at most 0.11 s later (outer.log DATE 09:43:54.956Z precedes COLD; 1-G.log
+  PROV start 09:43:55.067Z); no ps sample exists in between, so whether 11.8 was rising or decaying is unverified.
+- **Evidence:** .handoff/evidence/U9-B2/calA2.log; .handoff/evidence/U9-cal-b418c3a-2/hold-0/outer.log, 1-G.log; .handoff/research/u9a2-cold/RESULT.txt (probe, 1 run).
+- **Law:** a macOS ps pcpu reading is a decayed average; a sample taken before the process has history (or one single sample) is
+  not evidence of cold. Law 4 (the settle accepted a reading that cannot show cold); no new numbered law yet.
+- **Gate:** none yet. Open: maintainer question Q-U9-COLDMIN, options (a) minimum dwell -- settled only after both pids read
+  < 10 on 2 consecutive polls with the first at outer uptime >= 2000 ms; (b) exempt the PIDS outer + parent from child
+  PROV busy lists; (c) both; (d) leave U9 PENDING. No ruling yet (plan-U9A2-v1 RISK routed it to the maintainer). 0 of 8
+  counted U9 attempts spent.
+- **Reopens with:** n/a (open); a fix must clear test/reproof.cold.test.mjs and test/reproof.judge.test.mjs.
 
 ## C. Measurements (this package's own runs on ABGate.js)
 
