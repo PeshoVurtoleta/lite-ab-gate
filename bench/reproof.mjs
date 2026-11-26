@@ -21,13 +21,16 @@
 //   KILL    = a FINDING from G; a NOT-TF tool line from G; G tool-bytes != 0; GC-WINDOW major > 0 in G; > 1 VOID in
 //             the 10 G runs whose paired P run was clean; any r outside its interval.
 //   INVALID = (hold, exit 2, PENDING) a P VOID or P FINDING (C-45); t outside the A/A band [0.95, 1.05] (C-44); an M VOID; a non-empty busy-node
-//             or a quiet-lock state other than `quiet` in any PROV line; outer.log COLD settled=no (C-67: the outer or
-//             its parent pid still read >= 10 % CPU after the 60-poll cold settle before child 1).
+//             or a quiet-lock state other than `quiet` in any PROV line; outer.log COLD settled=no (C-67: the outer and
+//             its parent pid never both read < 10 % CPU on 2 consecutive polls, the first at outer uptime >= 2000 ms,
+//             within the 60-poll cold settle before child 1).
 //   STOP    = any child exit 1; any input sha differs (P / lane / Ohlc / baseline pins, G across holds, log bytes vs
 //             outer.log); M == G; Node < 26 (C-31); a truncated / malformed log; a --verdict-file re-judge that
 //             disagrees with its child; the mutant fails to fire; a missing / repeated / malformed / misplaced (after
 //             CHILD 1) / inconsistent PIDS or COLD line in outer.log (C-67: incl. a reading that is not a non-negative
-//             number or NaN, and settled=no before the 60-poll cap); any SETTLE defect in a G / M log (missing,
+//             number or NaN, settled=no before the 60-poll cap, an old-grammar COLD line, polls outside 2..60,
+//             dwell-ms != 2000, pair-ms < (polls-2) x 500, settled disagreeing with pair-ms >= 2000 and all four
+//             readings < 10); any SETTLE defect in a G / M log (missing,
 //             repeated, malformed incl. the `skipped` form, settled= disagreeing with pass-bytes, settled=no without its
 //             VOID TIER-SETTLE or the reverse) and any SETTLE line in a P log; a WINDOW tool-bytes that is not a number.
 //   Holds run on a harness (this file) whose sha differs from the current one are EXCLUDED (do not count).
@@ -63,8 +66,9 @@ const AA_LO = 0.95, AA_HI = 1.05, SLOW_MED = 1.25, SLOW_Q1 = 1.10, ALLOC_MAX = 1
 export const BAND = Object.freeze({ medLo: 0.98, medHi: 1.02, holdLo: 0.95, holdHi: 1.05, twinLo: 0.95, twinHi: 1.05, fire: 1.02 });
 export const HOLDS = 5, MAX_ATTEMPTS = 8, MUT = 1.04, G_VOID_MAX = 1;
 // C-67 cold settle before child 1: the outer and its parent pid both read < max % CPU (one ps snapshot per poll),
-// polled every ms, at most cap polls (cap hit -> COLD settled=no -> INVALID hold; the 5 children still run)
-export const COLD = Object.freeze({ max: 10, ms: 500, cap: 60 });
+// polled every ms, at most cap polls (cap hit -> COLD settled=no -> INVALID hold; the 5 children still run).
+// Minimum dwell (A36 / A37): settled only on 2 consecutive cold polls, the first at outer uptime >= dwell ms.
+export const COLD = Object.freeze({ max: 10, ms: 500, cap: 60, dwell: 2000 });
 export const REQUIRED_FLAGS = Object.freeze(['--expose-gc', '--allow-natives-syntax', '--no-concurrent-recompilation',
     '--min-semi-space-size=4', '--max-semi-space-size=4', '--single-threaded-gc']);
 export const ORDER = (n) => ((n & 1) === 1 ? ['P', 'G', 'M', 'G', 'P'] : ['G', 'P', 'M', 'P', 'G']);
@@ -333,7 +337,8 @@ export function assessLog(o) {
 
 // ---------------------------------------------------------------- outer.log
 /** parseOuter(text) -> { n, order[], node, sha{P,G,M,lane,ohlc,baseline,harness}, pids, cold, children[5], rejudge[5], errors[] }
- *  pids = { outer, parent } | null; cold = { polls, cap, ms, outer, parent, outerText, parentText, settled } | null (C-67). */
+ *  pids = { outer, parent } | null; cold = { polls, cap, ms, dwell, pairMs, prevOuter, prevParent, outer, parent,
+ *  prevOuterText, prevParentText, outerText, parentText, settled } | null (C-67, A37 grammar). */
 export function parseOuter(text) {
     const o = { n: NaN, order: null, node: null, sha: {}, pids: null, cold: null, children: [], rejudge: [], errors: [] };
     let nPids = 0, nCold = 0, child = false;
@@ -349,15 +354,23 @@ export function parseOuter(text) {
         } else if (/^COLD( |$)/.test(l)) {
             if (++nCold === 2) o.errors.push('COLD twice');
             if (child) o.errors.push('COLD after CHILD 1');
-            m = /^COLD polls=(\d+) cap=(\d+) interval-ms=(\d+) outer=(\S+) parent=(\S+) settled=(yes|no)$/.exec(l);
-            const ox = m === null ? undefined : PCT(m[4]), px = m === null ? undefined : PCT(m[5]);
-            if (ox === undefined || px === undefined) { o.errors.push('COLD line malformed'); continue; }
-            o.cold = { polls: Number(m[1]), cap: Number(m[2]), ms: Number(m[3]), outer: ox, parent: px, outerText: m[4], parentText: m[5], settled: m[6] === 'yes' };
-            if (!o.cold.settled && o.cold.polls !== COLD.cap) o.errors.push('COLD settled=no before the cap (polls=' + m[1] + ', cap ' + COLD.cap + ')');
-            if (o.cold.cap !== COLD.cap || o.cold.ms !== COLD.ms) o.errors.push('COLD cap/interval not ' + COLD.cap + '/' + COLD.ms + ' (cap=' + m[2] + ' interval-ms=' + m[3] + ')');
-            if (!(o.cold.polls >= 1 && o.cold.polls <= COLD.cap)) o.errors.push('COLD polls outside 1..' + COLD.cap + ' (polls=' + m[1] + ')');
-            // settled iff BOTH read below COLD.max (NaN = a missing pid / failed ps -> not settled)
-            if (o.cold.settled !== (ox < COLD.max && px < COLD.max)) o.errors.push('COLD settled=' + m[6] + ' disagrees with outer=' + m[4] + ' parent=' + m[5]);
+            m = /^COLD polls=(\d+) cap=(\d+) interval-ms=(\d+) dwell-ms=(\d+) pair-ms=(\d+) prev-outer=(\S+) prev-parent=(\S+) outer=(\S+) parent=(\S+) settled=(yes|no)$/.exec(l);
+            const r = m === null ? [] : [PCT(m[6]), PCT(m[7]), PCT(m[8]), PCT(m[9])];
+            if (m === null || r.includes(undefined)) { o.errors.push('COLD line malformed'); continue; }
+            const [pox, ppx, ox, px] = r;
+            o.cold = { polls: Number(m[1]), cap: Number(m[2]), ms: Number(m[3]), dwell: Number(m[4]), pairMs: Number(m[5]), prevOuter: pox, prevParent: ppx,
+                outer: ox, parent: px, prevOuterText: m[6], prevParentText: m[7], outerText: m[8], parentText: m[9], settled: m[10] === 'yes' };
+            const c = o.cold;
+            if (!c.settled && c.polls !== COLD.cap) o.errors.push('COLD settled=no before the cap (polls=' + m[1] + ', cap ' + COLD.cap + ')');
+            if (c.cap !== COLD.cap || c.ms !== COLD.ms) o.errors.push('COLD cap/interval not ' + COLD.cap + '/' + COLD.ms + ' (cap=' + m[2] + ' interval-ms=' + m[3] + ')');
+            if (c.dwell !== COLD.dwell) o.errors.push('COLD dwell-ms not ' + COLD.dwell + ' (dwell-ms=' + m[4] + ')');
+            // a pair needs 2 polls (A37 (d)): polls=1 is impossible for settled=yes AND settled=no
+            if (!(c.polls >= 2 && c.polls <= COLD.cap)) o.errors.push('COLD polls outside 2..' + COLD.cap + ' (polls=' + m[1] + ')');
+            // poll k-1 ran at least (k-2) sleeps after poll 1 (uptime >= 0): a smaller pair-ms is an implausible clock
+            if (c.pairMs < (c.polls - 2) * COLD.ms) o.errors.push('COLD pair-ms=' + m[5] + ' below (polls-2) x ' + COLD.ms + ' = ' + ((c.polls - 2) * COLD.ms) + ' (implausible clock, polls=' + m[1] + ')');
+            // settled iff the pair's first poll is at uptime >= dwell AND all 4 readings < COLD.max (NaN -> not settled)
+            const want = c.pairMs >= COLD.dwell && pox < COLD.max && ppx < COLD.max && ox < COLD.max && px < COLD.max;
+            if (c.settled !== want) o.errors.push('COLD settled=' + m[10] + ' disagrees with pair-ms=' + m[5] + ' prev-outer=' + m[6] + ' prev-parent=' + m[7] + ' outer=' + m[8] + ' parent=' + m[9]);
         } else if ((m = /^OUTER u9-reproof hold=(\d+) order=(\S+)$/.exec(l)) !== null) { o.n = Number(m[1]); o.order = m[2].split(','); }
         else if ((m = /^NODE (v\d+\.\d+\.\d+) /.exec(l)) !== null) o.node = m[1];
         else if ((m = /^SHA (\S+) (\S+)/.exec(l)) !== null) {
@@ -423,7 +436,7 @@ export function judgeHold(hold, opts = {}) {
     const res = { n, node: out.node, status: null, stop, invalid, kill, excluded, gVoidCleanP: 0, r: {}, rAB: {}, t: {}, rM: {}, sha: out.sha, busy: [] };
     if (stop.length > 0 || Object.keys(parsed).length !== 5) { res.status = 'STOP'; return res; }
     const cold = out.cold;   // parseOuter made a missing / malformed / inconsistent COLD line a STOP above
-    if (!cold.settled) invalid.push('COLD outer=' + cold.outerText + ' parent=' + cold.parentText + ' not < ' + COLD.max + ' after ' + cold.polls + ' polls (cap ' + COLD.cap + ', C-67)');
+    if (!cold.settled) invalid.push('COLD prev-outer=' + cold.prevOuterText + ' prev-parent=' + cold.prevParentText + ' outer=' + cold.outerText + ' parent=' + cold.parentText + ' not < ' + COLD.max + ' on 2 consecutive polls after ' + cold.polls + ' polls (cap ' + COLD.cap + ', C-67)');
     for (const i of [p1, p2, g1, g2, m1]) for (const b of facts[i].busy) { invalid.push(i + '-' + order[i - 1] + ' ' + b); res.busy.push(b); }
     for (const i of [p1, p2]) {
         if (facts[i].voids.length > 0) invalid.push(i + '-P VOID ' + facts[i].voids.join(' | '));
@@ -545,18 +558,30 @@ export function pcpuOf(psText, pid) {
     }
     return n === 1 ? hit : NaN;
 }
-/** coldSettle(read, sleep, pids) -> { polls, outer, parent, settled } (C-67). Pure: read() returns ps text, ONE read
- *  per poll; sleep(COLD.ms) between polls, never after the last; settled iff both pids read < COLD.max in one snapshot.
- *  pids = { outer, parent }. Cap hit -> settled false with the last poll's readings. */
-export function coldSettle(read, sleep, pids) {
-    let outer = NaN, parent = NaN;
+/** coldSettle(read, sleep, pids, now) -> { polls, outer, parent, prevOuter, prevParent, pairMs, settled } (C-67, A37).
+ *  Pure: per poll ONE now() (t = Math.floor(now()), the outer uptime in ms) then ONE read() (ps text); sleep(COLD.ms)
+ *  between polls, never after the deciding / last poll. Poll k settles iff k >= 2, t[k-1] >= COLD.dwell and both pids
+ *  read < COLD.max at poll k-1 AND poll k (a reading >= COLD.max or NaN at poll k resets the pair). pairMs = t[k-1];
+ *  prevOuter / prevParent = the poll k-1 readings. pids = { outer, parent }. Cap hit -> settled false with the
+ *  poll cap-1 / poll cap values. */
+export function coldSettle(read, sleep, pids, now) {
+    let outer = NaN, parent = NaN, prevOuter = NaN, prevParent = NaN, pairMs = NaN, t = NaN;
     for (let k = 1; k <= COLD.cap; k++) {
-        const t = read();
-        outer = pcpuOf(t, pids.outer); parent = pcpuOf(t, pids.parent);
-        if (outer < COLD.max && parent < COLD.max) return { polls: k, outer, parent, settled: true };
+        prevOuter = outer; prevParent = parent; pairMs = t;
+        t = Math.floor(now());
+        const ps = read();
+        outer = pcpuOf(ps, pids.outer); parent = pcpuOf(ps, pids.parent);
+        if (k >= 2 && pairMs >= COLD.dwell && prevOuter < COLD.max && prevParent < COLD.max && outer < COLD.max && parent < COLD.max) {
+            return { polls: k, outer, parent, prevOuter, prevParent, pairMs, settled: true };
+        }
         if (k < COLD.cap) sleep(COLD.ms);
     }
-    return { polls: COLD.cap, outer, parent, settled: false };
+    return { polls: COLD.cap, outer, parent, prevOuter, prevParent, pairMs, settled: false };
+}
+/** coldLine(cs) -> the outer.log COLD line for a coldSettle result (C-67 grammar (c), A37). */
+export function coldLine(cs) {
+    return 'COLD polls=' + cs.polls + ' cap=' + COLD.cap + ' interval-ms=' + COLD.ms + ' dwell-ms=' + COLD.dwell + ' pair-ms=' + cs.pairMs +
+        ' prev-outer=' + cs.prevOuter + ' prev-parent=' + cs.prevParent + ' outer=' + cs.outer + ' parent=' + cs.parent + ' settled=' + (cs.settled ? 'yes' : 'no');
 }
 function psText() {
     try { return execFileSync('ps', ['-Ao', 'pcpu=,pid=,comm='], { encoding: 'utf8', timeout: 10000 }); } catch (e) { return ''; }
@@ -640,9 +665,10 @@ export function holdMain(argv) {
     for (const k of ['lane', 'ohlc', 'baseline', 'harness']) put('SHA ' + k + ' ' + shas[k]);
     put('RUNS 5 flags ' + REQUIRED_FLAGS.join(' ') + ' cwd ' + R1);
     put('ENV deleted for every child: ' + ENV_DROP.map((k) => k + (Object.hasOwn(process.env, k) ? '(was set)' : '(unset)')).join(' '));
-    // C-67: wait (capped) until neither this process nor its quiet-lock parent reads busy; cap hit -> the judge reads INVALID
-    const cs = coldSettle(psText, sleepMs, pids);
-    put('COLD polls=' + cs.polls + ' cap=' + COLD.cap + ' interval-ms=' + COLD.ms + ' outer=' + cs.outer + ' parent=' + cs.parent + ' settled=' + (cs.settled ? 'yes' : 'no'));
+    // C-67: wait (capped) until neither this process nor its quiet-lock parent reads busy on 2 consecutive polls, the
+    // first at outer uptime >= COLD.dwell ms (A36 minimum dwell); cap hit -> the judge reads INVALID
+    const cs = coldSettle(psText, sleepMs, pids, () => process.uptime() * 1000);
+    put(coldLine(cs));
     const logs = {};
     for (let i = 1; i <= 5; i++) {
         const role = order[i - 1];

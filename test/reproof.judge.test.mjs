@@ -69,13 +69,14 @@ const G_LOGS = RESEARCH.map((p) => toG(p, G_SHA.slice(0, 8)));
 const M_LOGS = G_LOGS.map((g) => scaleB(edit1(g, ' sha256 ' + G_SHA.slice(0, 8) + '\n', ' sha256 ' + M_SHA.slice(0, 8) + '\n'), MUT));
 
 /** hold n (1..5) -> { n, logs: {1..5}, sha, node, exits, rejudge, pids, cold } (mutable); outer.log is built LAST (mk).
- *  pids / cold = the outer.log PIDS / COLD line (C-67), null = line dropped. */
+ *  pids / cold = the outer.log PIDS / COLD line (C-67; COLD in the A37 dwell grammar, default on the pair-ms = 2000
+ *  dwell boundary), null = line dropped. */
 function baseHold(n, src = n) {
     const order = ORDER(n), logs = {};
     order.forEach((role, j) => { logs[j + 1] = role === 'P' ? RESEARCH[src - 1] : role === 'G' ? G_LOGS[src - 1] : M_LOGS[src - 1]; });
     return { n, order, logs, sha: { P: PIN.P, G: G_SHA, M: M_SHA, lane: PIN.lane, ohlc: PIN.ohlc, baseline: PIN.baseline, harness: H_SHA },
         node: 'v26.8.2', exits: [0, 0, 0, 0, 0], match: ['yes', 'yes', 'yes', 'yes', 'yes'],
-        pids: 'PIDS outer=4242 parent=4241', cold: 'COLD polls=1 cap=60 interval-ms=500 outer=0.0 parent=0.0 settled=yes' };
+        pids: 'PIDS outer=4242 parent=4241', cold: 'COLD polls=2 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=2000 prev-outer=0.0 prev-parent=0.0 outer=0.0 parent=0.0 settled=yes' };
 }
 function mk(h) {
     const L = ['OUTER u9-reproof hold=' + h.n + ' order=' + h.order.join(','), 'NODE ' + h.node + ' v8 14.6.202.34-node.28'];
@@ -183,22 +184,24 @@ const ROWS = [
     ['P RAW SLOW x0.6, no printed VOID (hold 3, null:1e5:1e3)', (hs) => { const h = hs[2], i = slot(h, 'P', 1); h.logs[i] = scaleRaw(h.logs[i], 'null:1e5:1e3', 'SLOW', 0.6); }, 'PENDING', /SLOW-DEAD \(re-derived/],
     ['tool-bytes=NaN (G, hold 4)', (hs) => { const h = hs[3], i = slot(h, 'G', 0); h.logs[i] = edit1(h.logs[i], 'WINDOW lane=bounds:1e5:1e5 tool-bytes=0 ', 'WINDOW lane=bounds:1e5:1e5 tool-bytes=NaN '); }, 'KILL', /tool-bytes=NaN/],
     // U9A2 (C-67, plan-U9A2-v1 C6): the outer's cold settle (PIDS / COLD) and the G / M SETTLE lines; each red on c20ee2d5
-    ['COLD parent=11.0 settled=no after the 60-poll cap (hold 2) -> INVALID [C-67]', (hs) => { hs[1].cold = 'COLD polls=60 cap=60 interval-ms=500 outer=0.0 parent=11.0 settled=no'; }, 'PENDING', /^COLD outer=0\.0 parent=11\.0 not < 10 after 60 polls \(cap 60, C-67\)$/m],
-    ['COLD parent=10.0 settled=no (boundary: 10 is not < 10, hold 3) -> INVALID [C-67]', (hs) => { hs[2].cold = 'COLD polls=60 cap=60 interval-ms=500 outer=0.0 parent=10.0 settled=no'; }, 'PENDING', /^COLD outer=0\.0 parent=10\.0 not < 10 after 60 polls/m],
-    ['COLD settled=yes with parent=10.0 (hold 1) -> STOP [C-67]', (hs) => { hs[0].cold = 'COLD polls=1 cap=60 interval-ms=500 outer=0.0 parent=10.0 settled=yes'; }, 'STOP', /outer\.log: COLD settled=yes disagrees with outer=0\.0 parent=10\.0/],
+    ['COLD parent=11.0 settled=no after the 60-poll cap (hold 2) -> INVALID [C-67]', (hs) => { hs[1].cold = 'COLD polls=60 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=31000 prev-outer=0.0 prev-parent=11.0 outer=0.0 parent=11.0 settled=no'; }, 'PENDING', /^COLD prev-outer=0\.0 prev-parent=11\.0 outer=0\.0 parent=11\.0 not < 10 on 2 consecutive polls after 60 polls \(cap 60, C-67\)$/m],
+    ['COLD parent=10.0 settled=no (boundary: 10 is not < 10, hold 3) -> INVALID [C-67]', (hs) => { hs[2].cold = 'COLD polls=60 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=31000 prev-outer=0.0 prev-parent=10.0 outer=0.0 parent=10.0 settled=no'; }, 'PENDING', /^COLD prev-outer=0\.0 prev-parent=10\.0 outer=0\.0 parent=10\.0 not < 10 on 2 consecutive polls after 60 polls/m],
+    ['COLD settled=yes with parent=10.0 (hold 1) -> STOP [C-67]', (hs) => { hs[0].cold = 'COLD polls=2 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=2000 prev-outer=0.0 prev-parent=0.0 outer=0.0 parent=10.0 settled=yes'; }, 'STOP', /outer\.log: COLD settled=yes disagrees with pair-ms=2000 prev-outer=0\.0 prev-parent=0\.0 outer=0\.0 parent=10\.0/],
     ['PIDS line missing (hold 3) -> STOP [C-67]', (hs) => { hs[2].pids = null; }, 'STOP', /outer\.log: no PIDS line/],
     ['COLD line missing (hold 4) -> STOP [C-67]', (hs) => { hs[3].cold = null; }, 'STOP', /outer\.log: no COLD line/],
     ['COLD line after CHILD 1 (hold 5) -> STOP [C-67]', (hs) => { const h = hs[4], c = h.cold; h.cold = null; h.outerEdit = (o) => o.replace(/^(CHILD 1 .*)$/m, (s) => s + '\n' + c); }, 'STOP', /outer\.log: COLD after CHILD 1/],
-    ['COLD polls=61 (hold 2) -> STOP [C-67]', (hs) => { hs[1].cold = 'COLD polls=61 cap=60 interval-ms=500 outer=0.0 parent=0.0 settled=yes'; }, 'STOP', /outer\.log: COLD polls outside 1\.\.60/],
+    ['COLD polls=61 (hold 2) -> STOP [C-67]', (hs) => { hs[1].cold = 'COLD polls=61 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=31500 prev-outer=0.0 prev-parent=0.0 outer=0.0 parent=0.0 settled=yes'; }, 'STOP', /outer\.log: COLD polls outside 2\.\.60 \(polls=61\)/],
+    ['J1: COLD polls=1 settled=yes in the dwell grammar (hold 1) -> STOP: a pair needs 2 polls [C-67 A37]', (hs) => { hs[0].cold = 'COLD polls=1 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=2000 prev-outer=0.0 prev-parent=0.0 outer=0.0 parent=0.0 settled=yes'; }, 'STOP', /outer\.log: COLD polls outside 2\.\.60 \(polls=1\)/],
     ['m8: SETTLE line duplicated (G, hold 1, null:1e5:1e3) -> STOP [C-67]', (hs) => { const h = hs[0], i = slot(h, 'G', 0), s = 'SETTLE lane=null:1e5:1e3 passes=1 pass-bytes=0 settled=yes\n'; h.logs[i] = edit1(h.logs[i], s, s + s); }, 'STOP', /-G: SETTLE lane=null:1e5:1e3 twice/],
     ['m7: lone SETTLE settled=no pass-bytes=8,8,8, no VOID TIER-SETTLE (G, hold 2) -> STOP [C-67]', (hs) => { const h = hs[1], i = slot(h, 'G', 1); h.logs[i] = edit1(h.logs[i], 'SETTLE lane=bounds:1e5:1e5 passes=1 pass-bytes=0 settled=yes\n', 'SETTLE lane=bounds:1e5:1e5 passes=3 pass-bytes=8,8,8 settled=no\n'); }, 'STOP', /-G: SETTLE lane=bounds:1e5:1e5 settled=no without VOID TIER-SETTLE/],
     ['SETTLE settled=yes with pass-bytes=16 (M, hold 5) -> STOP [C-67]', (hs) => { const h = hs[4], i = slot(h, 'M', 0); h.logs[i] = edit1(h.logs[i], 'SETTLE lane=bounds:1e5:1e3 passes=1 pass-bytes=0 settled=yes\n', 'SETTLE lane=bounds:1e5:1e3 passes=1 pass-bytes=16 settled=yes\n'); }, 'STOP', /3-M: SETTLE lane=bounds:1e5:1e3 settled=yes disagrees with pass-bytes 16/],
     ['SETTLE line dropped on one lane (G, hold 3, bounds:1e5:1e5) -> STOP [C-67]', (hs) => { const h = hs[2], i = slot(h, 'G', 0); h.logs[i] = edit1(h.logs[i], 'SETTLE lane=bounds:1e5:1e5 passes=1 pass-bytes=0 settled=yes\n', ''); }, 'STOP', /-G: SETTLE lanes bounds:1e5:1e3,null:1e5:1e3 \(want bounds:1e5:1e3,bounds:1e5:1e5,null:1e5:1e3\)/],
     ['SETTLE line in a P log (P, hold 4) -> STOP [C-67]', (hs) => { const h = hs[3], i = slot(h, 'P', 0); h.logs[i] = edit1(h.logs[i], '\nRESULT lane=null:1e5:1e3 ', '\nSETTLE lane=null:1e5:1e3 passes=1 pass-bytes=0 settled=yes\nRESULT lane=null:1e5:1e3 '); }, 'STOP', /-P: SETTLE line in a P log/],
     ['tool-bytes=0x, not a number (G, hold 1) -> STOP (KILL before C-67)', (hs) => { const h = hs[0], i = slot(h, 'G', 1); h.logs[i] = edit1(h.logs[i], 'WINDOW lane=bounds:1e5:1e3 tool-bytes=0 ', 'WINDOW lane=bounds:1e5:1e3 tool-bytes=0x '); }, 'STOP', /-G: WINDOW lane=bounds:1e5:1e3 tool-bytes not a number/],
-    ['COLD outer=NaN parent=NaN settled=no (ps failed, hold 4) -> INVALID [C-67]', (hs) => { hs[3].cold = 'COLD polls=60 cap=60 interval-ms=500 outer=NaN parent=NaN settled=no'; }, 'PENDING', /^COLD outer=NaN parent=NaN not < 10 after 60 polls/m],
-    ['COLD settled=no before the cap (polls=59, hold 2) -> STOP [C-67]', (hs) => { hs[1].cold = 'COLD polls=59 cap=60 interval-ms=500 outer=0.0 parent=11.0 settled=no'; }, 'STOP', /outer\.log: COLD settled=no before the cap/],
-    ['COLD outer=-1 settled=yes (hold 3) -> STOP [C-67]', (hs) => { hs[2].cold = 'COLD polls=1 cap=60 interval-ms=500 outer=-1 parent=0.0 settled=yes'; }, 'STOP', /outer\.log: COLD line malformed/],
+    ['COLD outer=NaN parent=NaN settled=no (ps failed, hold 4) -> INVALID [C-67]', (hs) => { hs[3].cold = 'COLD polls=60 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=31000 prev-outer=NaN prev-parent=NaN outer=NaN parent=NaN settled=no'; }, 'PENDING', /^COLD prev-outer=NaN prev-parent=NaN outer=NaN parent=NaN not < 10 on 2 consecutive polls after 60 polls/m],
+    ['J2: COLD polls=60 settled=no, only prev-outer=12.0 busy (hold 5) -> INVALID [C-67 A37]', (hs) => { hs[4].cold = 'COLD polls=60 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=31000 prev-outer=12.0 prev-parent=0.0 outer=0.0 parent=0.0 settled=no'; }, 'PENDING', /^COLD prev-outer=12\.0 prev-parent=0\.0 outer=0\.0 parent=0\.0 not < 10 on 2 consecutive polls after 60 polls \(cap 60, C-67\)$/m],
+    ['COLD settled=no before the cap (polls=59, hold 2) -> STOP [C-67]', (hs) => { hs[1].cold = 'COLD polls=59 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=30500 prev-outer=0.0 prev-parent=11.0 outer=0.0 parent=11.0 settled=no'; }, 'STOP', /outer\.log: COLD settled=no before the cap/],
+    ['COLD outer=-1 settled=yes (hold 3) -> STOP [C-67]', (hs) => { hs[2].cold = 'COLD polls=2 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=2000 prev-outer=0.0 prev-parent=0.0 outer=-1 parent=0.0 settled=yes'; }, 'STOP', /outer\.log: COLD line malformed/],
 ];
 for (const [name, fn, want, re, opts] of ROWS) {
     test('must-fail: ' + name + ' -> ' + want, () => {
@@ -267,8 +270,8 @@ test('1 G VOID with a clean P is allowed (boundary of > 1) -> PASS', () => {
     assert.equal(j.gVoid, 1);
 });
 // U9A2 controls (C-67): green on c20ee2d5 and on the new harness
-test('control: COLD polls=60 outer=0.0 parent=9.9 settled=yes in every hold (cap and 10 % boundaries) -> PASS [C-67]', () => {
-    const j = run((hs) => { for (const h of hs) h.cold = 'COLD polls=60 cap=60 interval-ms=500 outer=0.0 parent=9.9 settled=yes'; });
+test('control: COLD polls=60 pair-ms=29000 parent=9.9 on both polls, settled=yes in every hold (cap, clock-floor and 10 % boundaries) -> PASS [C-67]', () => {
+    const j = run((hs) => { for (const h of hs) h.cold = 'COLD polls=60 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=29000 prev-outer=0.0 prev-parent=9.9 outer=0.0 parent=9.9 settled=yes'; });
     assert.equal(j.verdict, 'PASS', j.reasons.join('\n'));
     assert.equal(j.valid, 5);
     for (const s of j.holds) assert.deepEqual([s.status, s.invalid], ['VALID', []]);
