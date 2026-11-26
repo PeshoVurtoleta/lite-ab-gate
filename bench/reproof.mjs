@@ -21,10 +21,15 @@
 //   KILL    = a FINDING from G; a NOT-TF tool line from G; G tool-bytes != 0; GC-WINDOW major > 0 in G; > 1 VOID in
 //             the 10 G runs whose paired P run was clean; any r outside its interval.
 //   INVALID = (hold, exit 2, PENDING) a P VOID or P FINDING (C-45); t outside the A/A band [0.95, 1.05] (C-44); an M VOID; a non-empty busy-node
-//             or a quiet-lock state other than `quiet` in any PROV line.
+//             or a quiet-lock state other than `quiet` in any PROV line; outer.log COLD settled=no (C-67: the outer or
+//             its parent pid still read >= 10 % CPU after the 60-poll cold settle before child 1).
 //   STOP    = any child exit 1; any input sha differs (P / lane / Ohlc / baseline pins, G across holds, log bytes vs
 //             outer.log); M == G; Node < 26 (C-31); a truncated / malformed log; a --verdict-file re-judge that
-//             disagrees with its child; the mutant fails to fire.
+//             disagrees with its child; the mutant fails to fire; a missing / repeated / malformed / misplaced (after
+//             CHILD 1) / inconsistent PIDS or COLD line in outer.log (C-67: incl. a reading that is not a non-negative
+//             number or NaN, and settled=no before the 60-poll cap); any SETTLE defect in a G / M log (missing,
+//             repeated, malformed incl. the `skipped` form, settled= disagreeing with pass-bytes, settled=no without its
+//             VOID TIER-SETTLE or the reverse) and any SETTLE line in a P log; a WINDOW tool-bytes that is not a number.
 //   Holds run on a harness (this file) whose sha differs from the current one are EXCLUDED (do not count).
 //   Precedence: STOP > KILL > NO VERDICT / PENDING > PASS. Fewer than 5 valid holds after >= 8 attempts, or more than 8
 //   attempts at all (even with 5 valid), = NO VERDICT; fewer than 5 valid after < 8 attempts = PENDING. A Node version
@@ -57,6 +62,9 @@ const AA_LO = 0.95, AA_HI = 1.05, SLOW_MED = 1.25, SLOW_Q1 = 1.10, ALLOC_MAX = 1
 // C-36 band (pre-registered)
 export const BAND = Object.freeze({ medLo: 0.98, medHi: 1.02, holdLo: 0.95, holdHi: 1.05, twinLo: 0.95, twinHi: 1.05, fire: 1.02 });
 export const HOLDS = 5, MAX_ATTEMPTS = 8, MUT = 1.04, G_VOID_MAX = 1;
+// C-67 cold settle before child 1: the outer and its parent pid both read < max % CPU (one ps snapshot per poll),
+// polled every ms, at most cap polls (cap hit -> COLD settled=no -> INVALID hold; the 5 children still run)
+export const COLD = Object.freeze({ max: 10, ms: 500, cap: 60 });
 export const REQUIRED_FLAGS = Object.freeze(['--expose-gc', '--allow-natives-syntax', '--no-concurrent-recompilation',
     '--min-semi-space-size=4', '--max-semi-space-size=4', '--single-threaded-gc']);
 export const ORDER = (n) => ((n & 1) === 1 ? ['P', 'G', 'M', 'G', 'P'] : ['G', 'P', 'M', 'P', 'G']);
@@ -89,6 +97,7 @@ export function wordOf(s) {
 export function median(xs) { return summary(xs).med; }
 
 // ---------------------------------------------------------------- log parser (both tools' formats; law 4)
+const PCT = (t) => (t === 'NaN' ? NaN : /^\d+(\.\d+)?$/.test(t) ? Number(t) : undefined);
 const NUM = (t) => (t === 'NaN' ? NaN : /^-?(\d+(\.\d+)?|Infinity)$/.test(t) ? Number(t) : undefined);
 function stat(t) {
     const m = /^(\S+?)\[(\S+?)\.\.(\S+)\]$/.exec(t);
@@ -102,7 +111,7 @@ export function parseLog(text, role) {
     const lines = String(text).split('\n');
     while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
     const o = { role, errors, node: null, K: NaN, C: NaN, inject: null, laneSha: null, toolSha8: null, frozen: {}, gated: null,
-        prov: [], control: 0, controlOk: false, windows: {}, results: {}, raw: {}, voidLines: [], verdict: null };
+        prov: [], control: 0, controlOk: false, windows: {}, settle: {}, results: {}, raw: {}, voidLines: [], verdict: null };
     const count = { rung: 0, spec: 0, gated: 0, verdict: 0 };
     for (let i = 0; i < lines.length; i++) {
         const l = lines[i];
@@ -144,7 +153,17 @@ export function parseLog(text, role) {
             if (m === null) { errors.push('WINDOW line malformed'); continue; }
             if (Object.hasOwn(o.windows, m[1])) errors.push('WINDOW lane=' + m[1] + ' twice');
             const b = NUM(m[2]);
+            // C-67: a token that is no number at all (`0x`) is a tool defect = STOP; a literal NaN still reads KILL below
+            if (b === undefined) errors.push('WINDOW lane=' + m[1] + ' tool-bytes not a number');
             o.windows[m[1]] = { bytes: b === undefined ? NaN : b, scavenges: Number(m[3]) };
+        } else if (/^SETTLE( |$)/.test(l)) {
+            // C-67 / C-48: one SETTLE line per gated lane in G / M; every defect is STOP (a tool defect is never a VOID)
+            if (role === 'P') { errors.push('SETTLE line in a P log'); continue; }
+            m = /^SETTLE lane=(\S+) passes=([1-3]) pass-bytes=(\S+) settled=(yes|no)$/.exec(l);
+            const pb = m === null ? null : m[3].split(',').map(NUM);
+            if (m === null || pb.includes(undefined)) { errors.push('SETTLE line malformed'); continue; }
+            if (Object.hasOwn(o.settle, m[1])) errors.push('SETTLE lane=' + m[1] + ' twice');
+            o.settle[m[1]] = { passes: Number(m[2]), bytes: pb, list: m[3], settled: m[4] };
         } else if (l.startsWith('RESULT ')) {
             const r = parseResult(l);
             if (typeof r === 'string') { errors.push(r); continue; }
@@ -185,6 +204,20 @@ export function parseLog(text, role) {
     if (rl !== want) errors.push('RESULT lanes ' + (rl || 'none') + ' (want ' + want + ')');
     if (Object.keys(o.raw).sort().join(',') !== want) errors.push('RAW lanes ' + Object.keys(o.raw).sort().join(',') + ' (want ' + want + ')');
     if (role !== 'P' && Object.keys(o.windows).sort().join(',') !== want) errors.push('WINDOW lanes ' + Object.keys(o.windows).sort().join(',') + ' (want ' + want + ')');
+    if (role !== 'P') {
+        const sl = Object.keys(o.settle).sort().join(',');
+        if (sl !== want) errors.push('SETTLE lanes ' + (sl || 'none') + ' (want ' + want + ')');
+        // yes = the last pass read exactly 0 and no earlier one did; no = the 3-pass cap, none read 0 (C-48)
+        for (const id in o.settle) {
+            const s = o.settle[id], b = s.bytes, k = b.length;
+            if (k !== s.passes) { errors.push('SETTLE lane=' + id + ' pass-bytes count != passes (' + k + ' vs ' + s.passes + ')'); continue; }
+            const ok = s.settled === 'yes' ? b[k - 1] === 0 && b.indexOf(0) === k - 1 : k === 3 && !b.includes(0);
+            if (!ok) errors.push('SETTLE lane=' + id + ' settled=' + s.settled + ' disagrees with pass-bytes ' + s.list);
+        }
+        const tv = new Set(o.voidLines.filter((v) => v.kind === 'TIER-SETTLE').map((v) => v.lane));
+        for (const id in o.settle) if (o.settle[id].settled === 'no' && !tv.has(id)) errors.push('SETTLE lane=' + id + ' settled=no without VOID TIER-SETTLE');
+        for (const id of tv) if (!Object.hasOwn(o.settle, id) || o.settle[id].settled !== 'no') errors.push('VOID TIER-SETTLE lane=' + id + ' without SETTLE settled=no');
+    }
     if (o.K !== K || o.C !== C) errors.push('K=' + o.K + ' C=' + o.C + ' (want K=' + K + ' C=' + C + ')');
     if (o.inject !== null && o.inject !== 'null') errors.push('inject=' + o.inject + ' (want null)');
     for (const id of LANES) {
@@ -299,17 +332,39 @@ export function assessLog(o) {
 }
 
 // ---------------------------------------------------------------- outer.log
-/** parseOuter(text) -> { n, order[], node, sha{P,G,M,lane,ohlc,baseline,harness}, children[5], rejudge[5], errors[] } */
+/** parseOuter(text) -> { n, order[], node, sha{P,G,M,lane,ohlc,baseline,harness}, pids, cold, children[5], rejudge[5], errors[] }
+ *  pids = { outer, parent } | null; cold = { polls, cap, ms, outer, parent, outerText, parentText, settled } | null (C-67). */
 export function parseOuter(text) {
-    const o = { n: NaN, order: null, node: null, sha: {}, children: [], rejudge: [], errors: [] };
+    const o = { n: NaN, order: null, node: null, sha: {}, pids: null, cold: null, children: [], rejudge: [], errors: [] };
+    let nPids = 0, nCold = 0, child = false;
     for (const l of String(text).split('\n')) {
         let m;
-        if ((m = /^OUTER u9-reproof hold=(\d+) order=(\S+)$/.exec(l)) !== null) { o.n = Number(m[1]); o.order = m[2].split(','); }
+        if (/^PIDS( |$)/.test(l)) {
+            if (++nPids === 2) o.errors.push('PIDS twice');
+            if (child) o.errors.push('PIDS after CHILD 1');
+            m = /^PIDS outer=(\d+) parent=(\d+)$/.exec(l);
+            if (m === null) { o.errors.push('PIDS line malformed'); continue; }
+            o.pids = { outer: Number(m[1]), parent: Number(m[2]) };
+            if (o.pids.outer === o.pids.parent) o.errors.push('PIDS outer == parent (' + m[1] + ')');
+        } else if (/^COLD( |$)/.test(l)) {
+            if (++nCold === 2) o.errors.push('COLD twice');
+            if (child) o.errors.push('COLD after CHILD 1');
+            m = /^COLD polls=(\d+) cap=(\d+) interval-ms=(\d+) outer=(\S+) parent=(\S+) settled=(yes|no)$/.exec(l);
+            const ox = m === null ? undefined : PCT(m[4]), px = m === null ? undefined : PCT(m[5]);
+            if (ox === undefined || px === undefined) { o.errors.push('COLD line malformed'); continue; }
+            o.cold = { polls: Number(m[1]), cap: Number(m[2]), ms: Number(m[3]), outer: ox, parent: px, outerText: m[4], parentText: m[5], settled: m[6] === 'yes' };
+            if (!o.cold.settled && o.cold.polls !== COLD.cap) o.errors.push('COLD settled=no before the cap (polls=' + m[1] + ', cap ' + COLD.cap + ')');
+            if (o.cold.cap !== COLD.cap || o.cold.ms !== COLD.ms) o.errors.push('COLD cap/interval not ' + COLD.cap + '/' + COLD.ms + ' (cap=' + m[2] + ' interval-ms=' + m[3] + ')');
+            if (!(o.cold.polls >= 1 && o.cold.polls <= COLD.cap)) o.errors.push('COLD polls outside 1..' + COLD.cap + ' (polls=' + m[1] + ')');
+            // settled iff BOTH read below COLD.max (NaN = a missing pid / failed ps -> not settled)
+            if (o.cold.settled !== (ox < COLD.max && px < COLD.max)) o.errors.push('COLD settled=' + m[6] + ' disagrees with outer=' + m[4] + ' parent=' + m[5]);
+        } else if ((m = /^OUTER u9-reproof hold=(\d+) order=(\S+)$/.exec(l)) !== null) { o.n = Number(m[1]); o.order = m[2].split(','); }
         else if ((m = /^NODE (v\d+\.\d+\.\d+) /.exec(l)) !== null) o.node = m[1];
         else if ((m = /^SHA (\S+) (\S+)/.exec(l)) !== null) {
             if (Object.hasOwn(o.sha, m[1])) o.errors.push('SHA ' + m[1] + ' twice');
             o.sha[m[1]] = m[2];
         } else if ((m = /^CHILD (\d) ([PGM]) exit (\S+) .*log-sha256 (\S+)$/.exec(l)) !== null) {
+            child = true;
             if (o.children.some((c) => c.i === Number(m[1]))) o.errors.push('CHILD ' + m[1] + ' twice');
             o.children.push({ i: Number(m[1]), role: m[2], exit: m[3], logSha: m[4] });
         } else if ((m = /^REJUDGE (\d) ([PGM]) exit (\S+) verdict (.+) match (yes|no)$/.exec(l)) !== null) {
@@ -320,6 +375,8 @@ export function parseOuter(text) {
     if (!Number.isInteger(o.n)) o.errors.push('no OUTER line');
     if (o.node === null) o.errors.push('no NODE line');
     for (const k of ['P', 'G', 'M', 'lane', 'ohlc', 'baseline', 'harness']) if (!HEX64.test(o.sha[k] || '')) o.errors.push('SHA ' + k + ' missing / not 64 hex');
+    if (nPids === 0) o.errors.push('no PIDS line');
+    if (nCold === 0) o.errors.push('no COLD line');
     return o;
 }
 const nodeMajor = (v) => { const m = /^v(\d+)\./.exec(v || ''); return m === null ? NaN : Number(m[1]); };
@@ -365,6 +422,8 @@ export function judgeHold(hold, opts = {}) {
     const [p1, p2] = idx('P'), [g1, g2] = idx('G'), [m1] = idx('M');
     const res = { n, node: out.node, status: null, stop, invalid, kill, excluded, gVoidCleanP: 0, r: {}, rAB: {}, t: {}, rM: {}, sha: out.sha, busy: [] };
     if (stop.length > 0 || Object.keys(parsed).length !== 5) { res.status = 'STOP'; return res; }
+    const cold = out.cold;   // parseOuter made a missing / malformed / inconsistent COLD line a STOP above
+    if (!cold.settled) invalid.push('COLD outer=' + cold.outerText + ' parent=' + cold.parentText + ' not < ' + COLD.max + ' after ' + cold.polls + ' polls (cap ' + COLD.cap + ', C-67)');
     for (const i of [p1, p2, g1, g2, m1]) for (const b of facts[i].busy) { invalid.push(i + '-' + order[i - 1] + ' ' + b); res.busy.push(b); }
     for (const i of [p1, p2]) {
         if (facts[i].voids.length > 0) invalid.push(i + '-P VOID ' + facts[i].voids.join(' | '));
@@ -451,8 +510,9 @@ export function judgeHolds(holds, opts = {}) {
 // ---------------------------------------------------------------- mutant (TASK 3)
 const MUT_LINE = /^([ \t]*)e\.ns\[x\] = \(T\[1\] - T\[0\]\) \* 1e6 \/ \(n \* e\.reps\);$/gm;
 const T1_READ = /T\[1\] = (?:PERF|performance)\.now\(\);/g;
-/** buildMutant(G text) -> M text: the timedRounds ns write (the line after the `T[1]` clock read) REPLACED by the
- *  same write x (e.col === 'B' ? MUT : 1) -- one line differs, line count unchanged. Branch-free on purpose: the
+/** buildMutant(G text) -> M text: the timedRounds ns write itself (the one `e.ns[x] = (T[1] - T[0]) ...` line, C-61;
+ *  in G 1d4d4255 that is :721, after the :720 verifyRun guard -- not the line after the `T[1]` clock read) REPLACED by
+ *  the same write x (e.col === 'B' ? MUT : 1) -- one line differs, line count unchanged. Branch-free on purpose: the
  *  calibration hold (U9 B1) showed an inserted `if (e.col === 'B') e.ns[x] *= 1.04;` is never reached while the tool
  *  arms timedRounds on its dummies, so TF compiles it as a deopt point and every M lane read VOID NOT-TF tool.
  *  Throws unless the anchor matches exactly once and the `T[1]` clock read is unique: C-61 accepts both forms,
@@ -473,6 +533,35 @@ function busyNodes() {
         return out.split('\n').map((l) => l.trim()).filter((l) => { const f = l.split(/\s+/); return f.length >= 3 && /(^|\/)node$/.test(f.slice(2).join(' ')) && Number(f[0]) >= 10 && Number(f[1]) !== process.pid; }).join(' | ');
     } catch (e) { return 'ps failed: ' + e.message; }
 }
+/** pcpuOf(psText, pid) -> the %CPU of the `ps -Ao pcpu=,pid=,comm=` row whose pid field is exactly `pid`; NaN when no
+ *  row (or more than one) matches or its pcpu is not a number (fail closed: NaN never reads as settled). */
+export function pcpuOf(psText, pid) {
+    let hit = NaN, n = 0;
+    for (const l of String(psText).split('\n')) {
+        const f = l.trim().split(/\s+/);
+        if (f.length < 2 || !/^\d+$/.test(f[1]) || Number(f[1]) !== pid) continue;
+        n++;
+        hit = /^\d+(\.\d+)?$/.test(f[0]) ? Number(f[0]) : NaN;
+    }
+    return n === 1 ? hit : NaN;
+}
+/** coldSettle(read, sleep, pids) -> { polls, outer, parent, settled } (C-67). Pure: read() returns ps text, ONE read
+ *  per poll; sleep(COLD.ms) between polls, never after the last; settled iff both pids read < COLD.max in one snapshot.
+ *  pids = { outer, parent }. Cap hit -> settled false with the last poll's readings. */
+export function coldSettle(read, sleep, pids) {
+    let outer = NaN, parent = NaN;
+    for (let k = 1; k <= COLD.cap; k++) {
+        const t = read();
+        outer = pcpuOf(t, pids.outer); parent = pcpuOf(t, pids.parent);
+        if (outer < COLD.max && parent < COLD.max) return { polls: k, outer, parent, settled: true };
+        if (k < COLD.cap) sleep(COLD.ms);
+    }
+    return { polls: COLD.cap, outer, parent, settled: false };
+}
+function psText() {
+    try { return execFileSync('ps', ['-Ao', 'pcpu=,pid=,comm='], { encoding: 'utf8', timeout: 10000 }); } catch (e) { return ''; }
+}
+function sleepMs(ms) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); }
 function baselineLoad() {
     try { return String(JSON.parse(readFileSync(join(os.homedir(), '.claude', 'quiet-baseline.json'), 'utf8')).load1); } catch (e) { return 'none'; }
 }
@@ -543,12 +632,17 @@ export function holdMain(argv) {
     put('LOAD start ' + la() + ' baseline ' + baselineLoad() + ' quiet-lock ' + (process.env.QUIET_LOCK_HOST || 'none'));
     put('WHY ' + (process.env.QUIET_LOCK_WHY || 'none'));
     put('BUSY start [' + busyNodes() + ']');
+    const pids = { outer: process.pid, parent: process.ppid };
+    put('PIDS outer=' + pids.outer + ' parent=' + pids.parent);
     put('SHA P ' + shas.P + ' ' + tools.P);
     put('SHA G ' + shas.G + ' ' + tools.G);
     put('SHA M ' + shas.M + ' ' + tools.M);
     for (const k of ['lane', 'ohlc', 'baseline', 'harness']) put('SHA ' + k + ' ' + shas[k]);
     put('RUNS 5 flags ' + REQUIRED_FLAGS.join(' ') + ' cwd ' + R1);
     put('ENV deleted for every child: ' + ENV_DROP.map((k) => k + (Object.hasOwn(process.env, k) ? '(was set)' : '(unset)')).join(' '));
+    // C-67: wait (capped) until neither this process nor its quiet-lock parent reads busy; cap hit -> the judge reads INVALID
+    const cs = coldSettle(psText, sleepMs, pids);
+    put('COLD polls=' + cs.polls + ' cap=' + COLD.cap + ' interval-ms=' + COLD.ms + ' outer=' + cs.outer + ' parent=' + cs.parent + ' settled=' + (cs.settled ? 'yes' : 'no'));
     const logs = {};
     for (let i = 1; i <= 5; i++) {
         const role = order[i - 1];

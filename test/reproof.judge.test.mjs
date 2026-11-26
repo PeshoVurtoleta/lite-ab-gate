@@ -29,10 +29,11 @@ const lineOf = (text, prefix) => {
     if (ls.length !== 1) throw new Error('lineOf: ' + ls.length + ' lines start with ' + prefix);
     return ls[0];
 };
-/** P-format log -> G-format log: the G tool sha8 on HEADER spec, a WINDOW line (0 tool bytes) before each RESULT. */
+/** P-format log -> G-format log: the G tool sha8 on HEADER spec, a SETTLE line (settled on pass 1, C-48 / C-67) and a
+ *  WINDOW line (0 tool bytes) before each RESULT. */
 function toG(p, sha8) {
     let t = edit1(p, ' sha256 74f1a3d4\n', ' sha256 ' + sha8 + '\n');
-    for (const id of LANES) t = edit1(t, '\nRESULT lane=' + id + ' ', '\nWINDOW lane=' + id + ' tool-bytes=0 scavenges=0\nRESULT lane=' + id + ' ');
+    for (const id of LANES) t = edit1(t, '\nRESULT lane=' + id + ' ', '\nSETTLE lane=' + id + ' passes=1 pass-bytes=0 settled=yes\nWINDOW lane=' + id + ' tool-bytes=0 scavenges=0\nRESULT lane=' + id + ' ');
     return t;
 }
 const f3 = (s) => s.med.toFixed(3) + '[' + s.q1.toFixed(3) + '..' + s.q3.toFixed(3) + ']';
@@ -67,16 +68,20 @@ function scaleRaw(text, id, col, f) {
 const G_LOGS = RESEARCH.map((p) => toG(p, G_SHA.slice(0, 8)));
 const M_LOGS = G_LOGS.map((g) => scaleB(edit1(g, ' sha256 ' + G_SHA.slice(0, 8) + '\n', ' sha256 ' + M_SHA.slice(0, 8) + '\n'), MUT));
 
-/** hold n (1..5) -> { n, logs: {1..5}, sha, node, exits, rejudge } (mutable); outer.log is built LAST (mk). */
+/** hold n (1..5) -> { n, logs: {1..5}, sha, node, exits, rejudge, pids, cold } (mutable); outer.log is built LAST (mk).
+ *  pids / cold = the outer.log PIDS / COLD line (C-67), null = line dropped. */
 function baseHold(n, src = n) {
     const order = ORDER(n), logs = {};
     order.forEach((role, j) => { logs[j + 1] = role === 'P' ? RESEARCH[src - 1] : role === 'G' ? G_LOGS[src - 1] : M_LOGS[src - 1]; });
     return { n, order, logs, sha: { P: PIN.P, G: G_SHA, M: M_SHA, lane: PIN.lane, ohlc: PIN.ohlc, baseline: PIN.baseline, harness: H_SHA },
-        node: 'v26.8.2', exits: [0, 0, 0, 0, 0], match: ['yes', 'yes', 'yes', 'yes', 'yes'] };
+        node: 'v26.8.2', exits: [0, 0, 0, 0, 0], match: ['yes', 'yes', 'yes', 'yes', 'yes'],
+        pids: 'PIDS outer=4242 parent=4241', cold: 'COLD polls=1 cap=60 interval-ms=500 outer=0.0 parent=0.0 settled=yes' };
 }
 function mk(h) {
     const L = ['OUTER u9-reproof hold=' + h.n + ' order=' + h.order.join(','), 'NODE ' + h.node + ' v8 14.6.202.34-node.28'];
+    if (h.pids !== null) L.push(h.pids);
     for (const k of ['P', 'G', 'M', 'lane', 'ohlc', 'baseline', 'harness']) L.push('SHA ' + k + ' ' + h.sha[k]);
+    if (h.cold !== null) L.push(h.cold);
     for (let i = 1; i <= 5; i++) {
         L.push('CHILD ' + i + ' ' + h.order[i - 1] + ' exit ' + h.exits[i - 1] + ' ms 1 stderr-bytes 0 log-sha256 ' + sha256(h.logs[i]));
         L.push('REJUDGE ' + i + ' ' + h.order[i - 1] + ' exit 0 verdict PASS match ' + h.match[i - 1]);
@@ -177,6 +182,23 @@ const ROWS = [
     // x0.6, not x0.9: the research SLOW medians are ~2.0, so x0.9 (1.8) stays above the 1.25 floor and could not go red
     ['P RAW SLOW x0.6, no printed VOID (hold 3, null:1e5:1e3)', (hs) => { const h = hs[2], i = slot(h, 'P', 1); h.logs[i] = scaleRaw(h.logs[i], 'null:1e5:1e3', 'SLOW', 0.6); }, 'PENDING', /SLOW-DEAD \(re-derived/],
     ['tool-bytes=NaN (G, hold 4)', (hs) => { const h = hs[3], i = slot(h, 'G', 0); h.logs[i] = edit1(h.logs[i], 'WINDOW lane=bounds:1e5:1e5 tool-bytes=0 ', 'WINDOW lane=bounds:1e5:1e5 tool-bytes=NaN '); }, 'KILL', /tool-bytes=NaN/],
+    // U9A2 (C-67, plan-U9A2-v1 C6): the outer's cold settle (PIDS / COLD) and the G / M SETTLE lines; each red on c20ee2d5
+    ['COLD parent=11.0 settled=no after the 60-poll cap (hold 2) -> INVALID [C-67]', (hs) => { hs[1].cold = 'COLD polls=60 cap=60 interval-ms=500 outer=0.0 parent=11.0 settled=no'; }, 'PENDING', /^COLD outer=0\.0 parent=11\.0 not < 10 after 60 polls \(cap 60, C-67\)$/m],
+    ['COLD parent=10.0 settled=no (boundary: 10 is not < 10, hold 3) -> INVALID [C-67]', (hs) => { hs[2].cold = 'COLD polls=60 cap=60 interval-ms=500 outer=0.0 parent=10.0 settled=no'; }, 'PENDING', /^COLD outer=0\.0 parent=10\.0 not < 10 after 60 polls/m],
+    ['COLD settled=yes with parent=10.0 (hold 1) -> STOP [C-67]', (hs) => { hs[0].cold = 'COLD polls=1 cap=60 interval-ms=500 outer=0.0 parent=10.0 settled=yes'; }, 'STOP', /outer\.log: COLD settled=yes disagrees with outer=0\.0 parent=10\.0/],
+    ['PIDS line missing (hold 3) -> STOP [C-67]', (hs) => { hs[2].pids = null; }, 'STOP', /outer\.log: no PIDS line/],
+    ['COLD line missing (hold 4) -> STOP [C-67]', (hs) => { hs[3].cold = null; }, 'STOP', /outer\.log: no COLD line/],
+    ['COLD line after CHILD 1 (hold 5) -> STOP [C-67]', (hs) => { const h = hs[4], c = h.cold; h.cold = null; h.outerEdit = (o) => o.replace(/^(CHILD 1 .*)$/m, (s) => s + '\n' + c); }, 'STOP', /outer\.log: COLD after CHILD 1/],
+    ['COLD polls=61 (hold 2) -> STOP [C-67]', (hs) => { hs[1].cold = 'COLD polls=61 cap=60 interval-ms=500 outer=0.0 parent=0.0 settled=yes'; }, 'STOP', /outer\.log: COLD polls outside 1\.\.60/],
+    ['m8: SETTLE line duplicated (G, hold 1, null:1e5:1e3) -> STOP [C-67]', (hs) => { const h = hs[0], i = slot(h, 'G', 0), s = 'SETTLE lane=null:1e5:1e3 passes=1 pass-bytes=0 settled=yes\n'; h.logs[i] = edit1(h.logs[i], s, s + s); }, 'STOP', /-G: SETTLE lane=null:1e5:1e3 twice/],
+    ['m7: lone SETTLE settled=no pass-bytes=8,8,8, no VOID TIER-SETTLE (G, hold 2) -> STOP [C-67]', (hs) => { const h = hs[1], i = slot(h, 'G', 1); h.logs[i] = edit1(h.logs[i], 'SETTLE lane=bounds:1e5:1e5 passes=1 pass-bytes=0 settled=yes\n', 'SETTLE lane=bounds:1e5:1e5 passes=3 pass-bytes=8,8,8 settled=no\n'); }, 'STOP', /-G: SETTLE lane=bounds:1e5:1e5 settled=no without VOID TIER-SETTLE/],
+    ['SETTLE settled=yes with pass-bytes=16 (M, hold 5) -> STOP [C-67]', (hs) => { const h = hs[4], i = slot(h, 'M', 0); h.logs[i] = edit1(h.logs[i], 'SETTLE lane=bounds:1e5:1e3 passes=1 pass-bytes=0 settled=yes\n', 'SETTLE lane=bounds:1e5:1e3 passes=1 pass-bytes=16 settled=yes\n'); }, 'STOP', /3-M: SETTLE lane=bounds:1e5:1e3 settled=yes disagrees with pass-bytes 16/],
+    ['SETTLE line dropped on one lane (G, hold 3, bounds:1e5:1e5) -> STOP [C-67]', (hs) => { const h = hs[2], i = slot(h, 'G', 0); h.logs[i] = edit1(h.logs[i], 'SETTLE lane=bounds:1e5:1e5 passes=1 pass-bytes=0 settled=yes\n', ''); }, 'STOP', /-G: SETTLE lanes bounds:1e5:1e3,null:1e5:1e3 \(want bounds:1e5:1e3,bounds:1e5:1e5,null:1e5:1e3\)/],
+    ['SETTLE line in a P log (P, hold 4) -> STOP [C-67]', (hs) => { const h = hs[3], i = slot(h, 'P', 0); h.logs[i] = edit1(h.logs[i], '\nRESULT lane=null:1e5:1e3 ', '\nSETTLE lane=null:1e5:1e3 passes=1 pass-bytes=0 settled=yes\nRESULT lane=null:1e5:1e3 '); }, 'STOP', /-P: SETTLE line in a P log/],
+    ['tool-bytes=0x, not a number (G, hold 1) -> STOP (KILL before C-67)', (hs) => { const h = hs[0], i = slot(h, 'G', 1); h.logs[i] = edit1(h.logs[i], 'WINDOW lane=bounds:1e5:1e3 tool-bytes=0 ', 'WINDOW lane=bounds:1e5:1e3 tool-bytes=0x '); }, 'STOP', /-G: WINDOW lane=bounds:1e5:1e3 tool-bytes not a number/],
+    ['COLD outer=NaN parent=NaN settled=no (ps failed, hold 4) -> INVALID [C-67]', (hs) => { hs[3].cold = 'COLD polls=60 cap=60 interval-ms=500 outer=NaN parent=NaN settled=no'; }, 'PENDING', /^COLD outer=NaN parent=NaN not < 10 after 60 polls/m],
+    ['COLD settled=no before the cap (polls=59, hold 2) -> STOP [C-67]', (hs) => { hs[1].cold = 'COLD polls=59 cap=60 interval-ms=500 outer=0.0 parent=11.0 settled=no'; }, 'STOP', /outer\.log: COLD settled=no before the cap/],
+    ['COLD outer=-1 settled=yes (hold 3) -> STOP [C-67]', (hs) => { hs[2].cold = 'COLD polls=1 cap=60 interval-ms=500 outer=-1 parent=0.0 settled=yes'; }, 'STOP', /outer\.log: COLD line malformed/],
 ];
 for (const [name, fn, want, re, opts] of ROWS) {
     test('must-fail: ' + name + ' -> ' + want, () => {
@@ -243,6 +265,25 @@ test('1 G VOID with a clean P is allowed (boundary of > 1) -> PASS', () => {
     const j = run((hs) => { const h = hs[0], i = slot(h, 'G', 0); h.logs[i] = edit1(h.logs[i], ' spin=112\n', ' spin=112 VOID=[ALLOC B 0.031 B/op]\n'); });
     assert.equal(j.verdict, 'PASS', j.reasons.join('\n'));
     assert.equal(j.gVoid, 1);
+});
+// U9A2 controls (C-67): green on c20ee2d5 and on the new harness
+test('control: COLD polls=60 outer=0.0 parent=9.9 settled=yes in every hold (cap and 10 % boundaries) -> PASS [C-67]', () => {
+    const j = run((hs) => { for (const h of hs) h.cold = 'COLD polls=60 cap=60 interval-ms=500 outer=0.0 parent=9.9 settled=yes'; });
+    assert.equal(j.verdict, 'PASS', j.reasons.join('\n'));
+    assert.equal(j.valid, 5);
+    for (const s of j.holds) assert.deepEqual([s.status, s.invalid], ['VALID', []]);
+});
+test('control: consistent SETTLE settled=no + VOID TIER-SETTLE + RESULT VOID (G, hold 1, bounds:1e5:1e5) -> a G VOID, PASS, gVoid 1 [C-67]', () => {
+    const j = run((hs) => {
+        const h = hs[0], i = slot(h, 'G', 0), why = 'TIER-SETTLE pass-bytes 8,8,8 (cap 3, none read exactly 0)';
+        let t = edit1(h.logs[i], 'SETTLE lane=bounds:1e5:1e5 passes=1 pass-bytes=0 settled=yes\n', 'SETTLE lane=bounds:1e5:1e5 passes=3 pass-bytes=8,8,8 settled=no\n');
+        t = edit1(t, ' spin=112\n', ' spin=112 VOID=[' + why + ']\nVOID TIER-SETTLE lane=bounds:1e5:1e5: ' + why + '\n');
+        h.logs[i] = t;
+    });
+    assert.equal(j.verdict, 'PASS', j.reasons.join('\n'));
+    assert.equal(j.gVoid, 1);
+    assert.equal(j.holds[0].gVoidCleanP, 1);
+    assert.deepEqual(j.holds[0].stop, []);
 });
 
 // ---- boundary rows (law 8): the decision on the control's parsed summaries with r set to the edge
@@ -326,7 +367,8 @@ test('law 4: bench/reproof.mjs never imports ABGate.js', () => {
     for (const l of imports) assert.doesNotMatch(l, /ABGate/);
     assert.ok(imports.length >= 5);
 });
-test('calibration fixtures: every real P / G / M log parses with 0 errors; G / M carry one WINDOW per lane', () => {
+const NO_SETTLE = 'SETTLE lanes none (want bounds:1e5:1e3,bounds:1e5:1e5,null:1e5:1e3)';
+test('calibration fixtures (311761f, pre-U9E): P parses with 0 errors; G / M must-fail on exactly [no SETTLE lines], one WINDOW per lane [C-67]', () => {
     const dir = join(ROOT, 'test', 'fixtures', 'reproof');
     assert.ok(existsSync(dir), 'test/fixtures/reproof/ missing (TASK 5)');
     const fs = readdirSync(dir).filter((f) => /^[1-5]-[PGM]\.log$/.test(f));
@@ -334,7 +376,7 @@ test('calibration fixtures: every real P / G / M log parses with 0 errors; G / M
     for (const f of fs) {
         const role = f[2];
         const o = parseLog(readFileSync(join(dir, f), 'utf8'), role);
-        assert.deepEqual(o.errors, [], f);
+        assert.deepEqual(o.errors, role === 'P' ? [] : [NO_SETTLE], f);
         if (role !== 'P') {
             assert.deepEqual(Object.keys(o.windows).sort(), LANES.slice().sort(), f);
             for (const id of LANES) assert.ok(Number.isFinite(o.windows[id].bytes), f + ' ' + id);
@@ -348,18 +390,18 @@ test('calibration fixtures match their SHA256SUMS', () => {
     assert.equal(rows.length, 7);
     for (const r of rows) { const [s, f] = r.split(/\s+/); assert.equal(sha256(readFileSync(join(CAL, f))), s, f); }
 });
-test('calibration hold (real outer.log + 5 real logs, 311761f G, first mutant): STOP-free, KILL on G tool-bytes, M VOID NOT-TF', () => {
+test('calibration hold (real outer.log + 5 real logs, 311761f G, first mutant): STOP on exactly no PIDS / COLD + no SETTLE; KILL / NOT-TF facts still read [C-67]', () => {
     const hold = { outer: calRead('outer.log'), logs: { 1: calRead('1-G.log'), 2: calRead('2-P.log'), 3: calRead('3-M.log'), 4: calRead('4-P.log'), 5: calRead('5-G.log') } };
     const s = judgeHolds([hold], { gSha: G_SHA }).holds[0];
-    assert.deepEqual(s.stop, []);
-    assert.equal(s.status, 'KILL');
-    assert.deepEqual(s.kill, ['1-G bounds:1e5:1e5 tool-bytes=4320', '5-G bounds:1e5:1e5 tool-bytes=4320']);
-    assert.ok(s.invalid.some((x) => /^3-M VOID .*NOT-TF tool timedRounds/.test(x)), s.invalid.join('\n'));
+    assert.deepEqual(s.stop, ['outer.log: no PIDS line', 'outer.log: no COLD line', '1-G: ' + NO_SETTLE, '3-M: ' + NO_SETTLE, '5-G: ' + NO_SETTLE]);
+    assert.equal(s.status, 'STOP');
+    for (const f of ['1-G.log', '5-G.log']) assert.deepEqual(assessLog(parseLog(calRead(f), 'G')).kill, ['bounds:1e5:1e5 tool-bytes=4320'], f);
+    assert.ok(assessLog(parseLog(calRead('3-M.log'), 'M')).voids.some((x) => /NOT-TF tool timedRounds/.test(x)));
     assert.equal(judgeHolds([hold], { gSha: G_SHA, harnessSha: H_SHA }).holds[0].excluded, true);
 });
-test('mutant recheck log (branch-free M on 311761f, real): parses clean, no VOID, no NOT-TF tool', () => {
+test('mutant recheck log (branch-free M on 311761f, real): errors exactly [no SETTLE lines]; no VOID, no NOT-TF tool [C-67]', () => {
     const o = parseLog(calRead('M-recheck.log'), 'M');
-    assert.deepEqual(o.errors, []);
+    assert.deepEqual(o.errors, [NO_SETTLE]);
     const a = assessLog(o);
     assert.deepEqual(a.voids, []);
     assert.deepEqual(a.kill, ['bounds:1e5:1e5 tool-bytes=4320']);
