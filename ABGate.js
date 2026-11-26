@@ -99,7 +99,7 @@ const INJECTIONS = Object.freeze({   // ab-gate :142-151, the generic five
     'post-bend': { want: 1, marker: /^STOP ORACLE: \S+ B#\d+ \(after timing, fresh reference\) op \d+ field \d+ got \S+ want \S+$/m, verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
     'ab-drift': { want: 2, marker: /^VOID REPS-DRIFT lane=\S+: REPS-DRIFT B\/AB \S+ reads [A-Z]+ but B\/A \S+ reads [A-Z]+ \(AB = A at B's reps \d+ vs A's \d+\)$/m, verdict: 'VERDICT NO VERDICT' },
     // the WARM line whose AA/A is above the A/A band at the printed precision (never 0.xxxx, 1.00xx..1.04xx or 1.0500)
-    'warm-skew': { want: 2, marker: /^WARM lane=\S+ round 0 \(discarded, not in any median\) A\/A=\S+ B\/A=\S+ AA\/A=(?!0\.|1\.0[0-4]|1\.0500 )\d+\.\d{4} /m, absent: 'VOID AA-DRIFT', verdict: 'VERDICT NO VERDICT (run shape)', K: 1 },
+    'warm-skew': { want: 2, marker: /^WARM lane=\S+ round 0 \(discarded, not in any median\) A\/A=\S+ B\/A=\S+ AA\/A=(?!0\.|1\.0[0-4]|1\.0500 )\d+\.\d{4} /m, absent: ['VOID AA-DRIFT', 'VOID NOT-TF'], verdict: 'VERDICT NO VERDICT (run shape)', K: 3 },
     'arr-bend': { want: 1, marker: /^STOP ORACLE: \S+ B#\d+ data\.\S+ \(after warm\) differs from the lane data at byte \d+$/m, verdict: 'VERDICT NO VERDICT (STOP ORACLE)' },
     // E2 (C-23): timedRounds deoptimized and pinned out of TF INSIDE the window (TF at its start, not at its end) -> the
     // window runs interpreted (WINDOW reads > 0 tool bytes) and the lane is VOID NOT-TF tool. Not in the selftest list.
@@ -114,7 +114,8 @@ const INJECTIONS = Object.freeze({   // ab-gate :142-151, the generic five
 const SPEC_INJECT = 'empty-gated';
 const TR_RE = /^[^:,\s]+:(edited|identity)(,[^:,\s]+:(edited|identity))*$/;
 const SELFTEST_CASE_MS = 600000;
-const AB_DRIFT_X = 64;   // ab-drift only: on bounds:1e5:1e3 (A ~45 ns, B ~2000 ns, SLOW spin ~ +45 ns) AB ~ +2900 ns -> B/AB FASTER
+const AB_DRIFT_X = 64;   // ab-drift only, any lane: AB = A spun 64 x the lane spin, so B/AB reads FASTER (unless B itself costs that
+// much) and disagrees with B/A; runLane forces B's reps to reps >>> 1 (1 -> 2) when sizing gave B A's reps (C-62), so AB is always timed
 const LANE_ID_RE = /^[A-Za-z0-9:._-]+$/;
 const WORDS = Object.freeze(['FASTER', 'SLOWER', 'WITHIN']);
 
@@ -183,7 +184,7 @@ function atAnchor(text, anchor, code, what) {
     const j = i + anchor.length;
     return text.slice(0, j) + ' ' + code + text.slice(j);
 }
-// globalThis.__labSpin / __labBox / __labBoxN / __labLate / __labWarm are created lazily in armNatives (never at import).
+// globalThis.__labSpin / __labBox / __labBoxN / __labLate / __labWarm / __labWarmOff are created lazily in armNatives (never at import).
 const spinned = (text, anchor, iters) => atAnchor(text, anchor, 'const __s = globalThis.__labSpin; for (let __i = 0; __i < ' + iters +
     '; __i++) { __s[__i & 255] = (__s[(__i + 1) & 255] + __i) | 0; }', 'spin anchor');
 // selftest `boxed` (S-9: no parameter names): a fractional double (k + 0.5, never integral) stored into a PACKED_ELEMENTS
@@ -191,9 +192,11 @@ const spinned = (text, anchor, iters) => atAnchor(text, anchor, 'const __s = glo
 const boxed = (text, anchor) => atAnchor(text, anchor, 'const __b = globalThis.__labBox, __c = globalThis.__labBoxN; __c[0] = (__c[0] + 1) | 0; ' +
     '__b[__c[0] & 255] = (__c[0] & 1023) + 0.5;', 'boxed anchor');
 // late-bend / post-bend: B returns early (out keeps the previous record: a bent result) once __labLate[0] is set; the
-// guard is compiled into B ONLY in those injection children. warm-skew: AA spins while __labWarm[0] is set (round 0).
+// guard is compiled into B ONLY in those injection children. warm-skew (C-62): AA spins while __labWarm[0] is set (the
+// pre-TF prime and round 0, so TF sees the spin arm and never deopts AA in the window); every other column carries the
+// same guard on __labWarmOff (never set), so AA/A compares like-for-like code on any kernel size.
 const lateGuard = (text, anchor) => atAnchor(text, anchor, 'if (globalThis.__labLate[0] !== 0) return;', 'late-bend anchor');
-const warmSpun = (text, anchor, iters) => atAnchor(text, anchor, 'if (globalThis.__labWarm[0] !== 0) { const __s = globalThis.__labSpin; for (let __i = 0; __i < ' + iters +
+const warmSpun = (text, anchor, iters, flag) => atAnchor(text, anchor, 'if (globalThis.' + flag + '[0] !== 0) { const __s = globalThis.__labSpin; for (let __i = 0; __i < ' + iters +
     '; __i++) { __s[__i & 255] = (__s[(__i + 1) & 255] + __i) | 0; } }', 'warm-skew anchor');
 
 // ---------------------------------------------------------------- natives + TF check (ab-gate :290-302)
@@ -207,8 +210,10 @@ function armNatives() {
     if (globalThis.__labBoxN === undefined) globalThis.__labBoxN = new Int32Array(1);
     if (globalThis.__labLate === undefined) globalThis.__labLate = new Int32Array(1);
     if (globalThis.__labWarm === undefined) globalThis.__labWarm = new Int32Array(1);
+    if (globalThis.__labWarmOff === undefined) globalThis.__labWarmOff = new Int32Array(1);   // C-62: the twin, never set
     globalThis.__labLate[0] = 0;
     globalThis.__labWarm[0] = 0;
+    globalThis.__labWarmOff[0] = 0;
     optStatus = new Function('f', 'return %GetOptimizationStatus(f);');
     forceOpt = new Function('f', '%PrepareFunctionForOptimization(f); %OptimizeFunctionOnNextCall(f);');
     const forceTf = new Function('f', '%PrepareFunctionForOptimization(f); f(1); f(2); %OptimizeFunctionOnNextCall(f); f(3);');
@@ -480,15 +485,17 @@ function makeCols(L, inject, SRC) {
     if (inject === 'bent-oracle') b = sub1('bent-oracle ' + L.id, b, ls.bend[0], ls.bend[1]);
     if (inject === 'boxed') b = boxed(b, ls.B.anchor);
     if (inject === 'late-bend' || inject === 'post-bend') b = lateGuard(b, ls.B.anchor);
-    const aa = inject === 'aa-drift' ? spinned(a, ls.A.anchor, L.spin) : inject === 'warm-skew' ? warmSpun(a, ls.A.anchor, 2 * L.spin) : a;
+    const ws = inject === 'warm-skew', wi = 2 * L.spin;   // C-62 (3): one same-shape guard per column, only AA's ever set
+    const aa = inject === 'aa-drift' ? spinned(a, ls.A.anchor, L.spin) : ws ? warmSpun(a, ls.A.anchor, wi, '__labWarm') : a;
+    const slow = inject === 'slow-dead' ? a : spinned(a, ls.A.anchor, L.spin);
     return [
-        { id: 'A', def: ls.A, text: a },
-        { id: 'B', def: ls.B, text: b },
+        { id: 'A', def: ls.A, text: ws ? warmSpun(a, ls.A.anchor, wi, '__labWarmOff') : a },
+        { id: 'B', def: ls.B, text: ws ? warmSpun(b, ls.B.anchor, wi, '__labWarmOff') : b },
         { id: 'AA', def: ls.A, text: aa },
-        { id: 'SLOW', def: ls.A, text: inject === 'slow-dead' ? a : spinned(a, ls.A.anchor, L.spin) },
+        { id: 'SLOW', def: ls.A, text: ws ? warmSpun(slow, ls.A.anchor, wi, '__labWarmOff') : slow },
         // Q-REPS (a): A compiled fresh (own nonce, like AA), timed at B's reps; kept only when B's reps differ from A's
         // ab-drift (Q-REPS-2): AB spun AB_DRIFT_X x the lane spin, so B/AB's word differs from B/A's (REPS-DRIFT by disagreement)
-        { id: 'AB', def: ls.A, text: inject === 'ab-drift' ? spinned(a, ls.A.anchor, AB_DRIFT_X * L.spin) : a },
+        { id: 'AB', def: ls.A, text: inject === 'ab-drift' ? spinned(a, ls.A.anchor, AB_DRIFT_X * L.spin) : ws ? warmSpun(a, ls.A.anchor, wi, '__labWarmOff') : a },
     ];
 }
 let NONCE = 0;   // module-wide on purpose: never reset, so no two compilations in one process share source text
@@ -772,6 +779,13 @@ async function runLane(ctx, L, cols, K, inject) {
     for (const e of entries) e.ns = new Float64Array(KR);
     for (const e of entries) verifyAll(e, L, L.expect, 'after the oracle pass');
     for (const e of entries) checkArr(e, L, 'after the oracle pass');
+    // C-62 (2): warm-skew primes the spin arm before TF (one verified call per AA entry), so round 0 never deopts AA
+    if (inject === 'warm-skew') {
+        const W0 = globalThis.__labWarm, pw = foldWant(L, 0, L.minWindow, 1);
+        W0[0] = 1;
+        for (const e of entries) if (e.col === 'AA') verifyRun(e, callRun(e, 0, L.minWindow, 1), pw, L, 'warm-skew prime');
+        W0[0] = 0;
+    }
     for (const e of entries) toTf(e, L);
     for (const e of entries) verifyAll(e, L, L.expect, 'after TF');
     for (const e of entries) checkArr(e, L, 'after TF');
@@ -785,7 +799,9 @@ async function runLane(ctx, L, cols, K, inject) {
     if (inject === 'arr-bend') bendArr(entries.find((e) => e.col === 'B'));
     for (const e of entries) checkArr(e, L, 'after warm');
     const { n, reps } = sizeWindow(entries.find((e) => e.col === 'A'), L);
-    const repsB = sizeReps(entries.find((e) => e.col === 'B'), n);
+    // C-62 (1): the ab-drift child forces B off A's reps when sizing made them equal, so AB and REPS-DRIFT run on any lane
+    const repsSized = sizeReps(entries.find((e) => e.col === 'B'), n);
+    const repsB = inject === 'ab-drift' && repsSized === reps ? (reps > 1 ? reps >>> 1 : 2) : repsSized;
     for (const e of entries) checkArr(e, L, 'after sizing');
     // Q-REPS (a): the AB column (A at B's reps) is timed only when B's reps differ from A's
     const live = repsB !== reps ? entries : entries.filter((e) => e.col !== 'AB');
@@ -1582,7 +1598,7 @@ function selftest(ctx, untimedOnly) {
     let TS = null;
     try { TS = selftestSpec(ctx); } catch (e) { say(ctx, 'SELFTEST tool-owned judge spec refused: ' + e.message + ' -> FAIL'); bad++; }
     const jr = TS === null ? [] : judgeRows(TS), cr = consumerRows(ctx);
-    // the timed slot (G-B2 / U8): the timed children on the FIRST gated lane (K = 3; warm-skew K = 1), + bent-oracle on
+    // the timed slot (G-B2 / U8): the timed children on the FIRST gated lane (K = 3, warm-skew too: C-62 (4)), + bent-oracle on
     // every lane whose B entry differs; never built under --selftest-untimed
     const cases = [];
     if (!untimedOnly && l0 !== undefined) {
@@ -1667,7 +1683,7 @@ function selftest(ctx, untimedOnly) {
         const r = child(ctx, ['--run', lane, '--K', String(k)], envWith(name), undefined);
         const has = spec.marker === null ? !/^(STOP|CRASH) /m.test(r.out) : spec.marker.test(r.out);
         let extra = '';
-        if (spec.absent !== undefined && r.out.includes(spec.absent)) extra += ' ' + JSON.stringify(spec.absent) + ' PRESENT;';
+        if (spec.absent !== undefined) for (const s of [].concat(spec.absent)) if (r.out.includes(s)) extra += ' ' + JSON.stringify(s) + ' PRESENT;';
         if (name === null) {
             // fix3 (re-review B1): the clean child's AB really ran at B's reps (RESULT reps=A:a,B:b,AB:b when a != b)
             const rl = r.out.split('\n').find((l) => l.startsWith('RESULT lane=' + lane + ' '));
@@ -1676,7 +1692,7 @@ function selftest(ctx, untimedOnly) {
             else if (rm[1] !== rm[2] ? rm[3] !== rm[2] : rm[3] !== undefined) extra += ' RESULT reps=' + field(rl, 'reps') + ' (want ' + (rm[1] !== rm[2] ? ',AB:' + rm[2] + ' at the end' : 'no AB') + ');';
         }
         if (name === 'warm-skew') {
-            // round 0 really was skewed (WARM AA/A > the band), and the counted AA (K = 1 round) holds 1 value, in band
+            // round 0 really was skewed (WARM AA/A > the band), and the counted AA holds exactly K values (C-62 (4): K = 3), in band
             const wl = r.out.split('\n').find((l) => l.startsWith('WARM lane=' + lane + ' ')), rl = r.out.split('\n').find((l) => l.startsWith('RAW lane=' + lane + ' '));
             const w0 = wl === undefined ? NaN : num((/ AA\/A=(\S+)/.exec(wl) || [])[1]);
             const raa = rl === undefined ? null : (/ AA=(\S+)/.exec(rl) || [])[1];
