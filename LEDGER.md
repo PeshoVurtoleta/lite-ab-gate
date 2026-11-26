@@ -463,12 +463,48 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   test/mutants.json 122 mutants, all killed by test/mutants.test.mjs (DETERMINISTIC, npm test; U5c4-npm-test.log 516 / 516), incl. 6 u5c-review mutants (the 5 r1 survivors + B1-nsopKeyed), each with its own row (U5c4-killers.log).
 - **Reopens with:** a RESULT field or value shape the C-51 / C-54..C-56 grammar accepts that the producer cannot print.
 
+### B15. The first local timed dogfood --selftest was red on 2 rows (ab-drift: equal reps, no AB; warm-skew: the injection deopts AA) *(FOUND 2026-11-26 burst 8, U8 B1 A1 run; diagnosed + ruled C-62 / SPEC A23 burst 9; status: FIXED by B15 (C-62), burst 9, review APPROVED)*
+- **What happened:** the timed `examples/ab.gate.mjs --selftest` (quiet-lock --strict, QUIET) read `SELFTEST 2 FAIL` on
+  f839f311 and on the pre-U9E build 2ffb7147 alike (pre-existing). `ab-drift null K=3`: marker VOID REPS-DRIFT ABSENT.
+  `warm-skew null K=1`: `VOID AA-DRIFT` PRESENT. The U8 TASK 0 discovery run and A1 had stayed PENDING since burst 5,
+  so the rows were built and reviewed against the prototype's lane, not this example's.
+- **Root cause:** (ab-drift, structural) the first gated lane `null` has A = B, so both columns size to the reps cap
+  (256) on any host; C-11 then drops AB and the REPS-DRIFT check never runs. The prototype passed because its first
+  gated lane had reps A:256,B:8. (warm-skew) `__labWarm[0]` is 0 through the oracle pass, TF, warm rounds, sizing and
+  settle, so AA is TF-compiled with the spin arm never run; round 0 deopts AA (VOID NOT-TF AA#0..2) and the counted
+  round runs below TF (aa 5.934 on f839f311). The row checked only AA-DRIFT absent, so the NOT-TF went unseen.
+  Mechanism (plan-B15 TASK 0 --trace-deopt probe, B15-probe-warmskew.log): 6 bailouts of AA's `run` / `kInto` between
+  SETTLE and WINDOW, reason "Insufficient type feedback for generic named access"; the clean probe reads 0
+  (B15-probe-clean.log). C-62 (3): the prime alone read counted AA 1.02-1.08 (PRELIMINARY: 2026-11-26, load1 15.28 / 14.29, node v26.8.2, Darwin arm64, 2 runs K=1 + K=3, scratch 32a8ebac; B15-probe-prime-K1.log, B15-probe-prime-K3.log), so every column of
+  the warm-skew child carries one guard of the same shape, only AA's reading `__labWarm` (maintainer Q-WARMSKEW-GUARD (a)).
+  Second cause (C-62 (4), maintainer Q-WARMSKEW-K (a)): single-sample K=1 noise; the first counted round after the skew
+  round reads high (1.0667 / 1.0305 in B15-A3-warmskew-K3-r1.log / -r2.log), so the row runs K = 3.
+- **Evidence:** .handoff/evidence/burst8-A1-selftest-strict-r2.log, burst8-diag-preU9E-selftest-strict.log;
+  .handoff/lite-ab-gate/plan-B15-v1.md; research/timing-ab/r1/logs/fix3-selftest.log:70, hold-selftest.log:70.
+  Hosted: no hosted run of this tool's selftest exists (I4 / X4 are LiteBisect logs) -- UNKNOWN.
+- **Law:** law 4 (a must-fail row whose precondition never holds is a control that fails open); law 5. Process
+  lesson: a PENDING timed discovery run is a blocker for the units built on it, not a footnote.
+- **Gate:** the timed selftest rows `ab-drift` / `warm-skew` (STATISTICAL tier, run under quiet-lock --strict; C-62:
+  ab-drift forces B's reps when equal; warm-skew primes AA before TF and requires VOID NOT-TF absent too). Measured
+  on 616d91c3 (K=1 row; superseded by C-62 (4)): `SELFTEST ran 78 of 78` / `SELFTEST all ok` (2026-11-26, quiet-lock host QUIET load1 1.23, baseline 2.21, node v26.8.2,
+  Darwin arm64, 1 run, ABGate.js 616d91c3; burst9-B15-selftest-strict.log, .prov.log). Revert mutants: M1 (no REPS-DRIFT push) / M2 (no
+  forced reps) -> marker ABSENT; M3 (no WARM reset) aa 5.325 K1 / 4.838 K3; M4 (no prime) aa 5.507 / 5.433 + NOT-TF; M5 (no
+  symmetric guard) aa 1.087 / 1.097 K1, 1.089 K3 -- all RED (quiet-lock QUIET load1 1.45-1.60, node v26.8.2, Darwin arm64,
+  1 run each; B15-review-mutants-verdicts.txt); the HEAD control 616d91c3 K=1 itself read aa 1.074 (the A3 kill). A3 on
+  1a280a18 (quiet-lock --strict QUIET load1 2.84, 1 run each): counted AA median 1.0007 (r1) and 1.0044 (r2), WARM AA/A
+  4.79 / 5.34, tool-bytes 0, no VOID; r3 (QUIET load1 2.07) median 1.0004; the full --selftest on
+  1a280a18 (quiet-lock --strict, QUIET load1 2.07, 1 run) reads `SELFTEST ran 78 of 78 (untimed 67, timed 11)` /
+  `SELFTEST all ok`, exit 0 (burst9-B15c-selftest-strict.log, .prov.log). M5 is a STATISTICAL catch, not
+  DETERMINISTIC. Nit: C-62 (3) has no DETERMINISTIC gate yet (an untimed column-text check is a FILLER).
+- **Reopens with:** a selftest row whose injection precondition (differing reps, a TF counted round) is not checked
+  by the row itself.
+
 ## C. Measurements (this package's own runs on ABGate.js)
 
 Placement: the U9D numbers below were measured on ABGate.js d4991c39 (frozen copy of HEAD 224bf19), so they are section C,
 not X.
 
-### C1. U9D: the C-43 `tool-bytes=4320` on `bounds:1e5:1e5` is lane-kernel JIT bytes, and AB copies tier `boundsInto` up at their 4th call *(FOUND 2026-11-25 burst 6, U9D probe; RULED C-48 / C-49; status: RULED, unit U9E pending)*
+### C1. U9D: the C-43 `tool-bytes=4320` on `bounds:1e5:1e5` is lane-kernel JIT bytes, and AB copies tier `boundsInto` up at their 4th call *(FOUND 2026-11-25 burst 6, U9D probe; RULED C-48 / C-49; status: FIXED by U9E B1 fc90801 + B2 / B3 gates, burst 9; the new frozen-G calibration re-run is still open)*
 - **What happened:** G (ABGate.js d4991c39) printed `WINDOW lane=bounds:1e5:1e5 tool-bytes=4320` in the calibration run
   (toy lanes 0). The probe split it: 4320 B = 8 synchronous TurboFan compiles of 8 distinct `boundsInto` SFIs (LiteOhlc
   Ohlc.js, the lane's non-inlined callee; 8 of the 12 A-family copies) inside the window, mean 540 B each; tool 0 B. The
@@ -492,8 +528,14 @@ not X.
   (untimed settle passes before the window until one reads exactly 0 B, cap 3, else VOID TIER-SETTLE; the C-36 / C-43 KILL
   on tool-bytes > 0 stands; the `performance` read hoisted to a module const); C-49 (the injections no-settle and
   settle-void are torture-only, out of the timed --selftest list).
-- **Gate:** none yet (U9E adds T-SETTLE on a frozen-only R1-shaped lane with AB_GATE_INJECT=no-settle as its must-fail,
-  and the settle-void control for VOID TIER-SETTLE; plan-U9E-v1.md).
+- **Fix:** U9E B1 (fc90801): runLane runs up to 3 untimed settle passes before the GC window until one reads exactly 0 B,
+  else VOID TIER-SETTLE; `SETTLE lane=<id> passes=<n> pass-bytes=<v,..> settled=yes|no`; the `performance` read is a
+  module const. A 0 B window needs settled callee tiers: a TF entry is not a TF path (law 3).
+- **Gate:** `npm run torture` (DETERMINISTIC, in npm run verify) T-SETTLE on the frozen-only R1-shaped lane `bounds:1e5:1e5` (test/fixtures/settle/r1-frozen.gate.mjs,
+  K=3; settled=yes, only the last pass 0, WINDOW tool-bytes 0) with the must-fail `no-settle` control, a `settle-void` row
+  and T2b (burst9-U9EB2-torture-r3.log; node >= 26, C-31); test/settle.test.mjs; 5 C-48 mutants in test/mutants.json (127
+  total, burst9-U9EB3-mutants-r2.log); judge.extra TIER-SETTLE rows; test/hotbody.parity.test.mjs (DETERMINISTIC, npm test;
+  burst9-U9EB3-npmtest-r2.log).
 - **Reopens with:** a new frozen G calibration re-run (after U9E review APPROVED) closes the U9E part; a callee tier-up inside the window on a settled lane reopens it.
 
 ## D. Process lessons

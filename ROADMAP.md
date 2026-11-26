@@ -18,7 +18,7 @@
   (`node ~/.claude/hooks/quiet-lock.mjs run "<what>" -- <cmd>`; `--strict` for a release-gating timing).
 - U9 statistical re-proof of the hoisted timed loop vs frozen ab-proto 74f1a3d4 is REQUIRED before 1.0 (C-23).
 
-## 2. SETTLED (binding for every agent; C-1..C-60)
+## 2. SETTLED (binding for every agent; C-1..C-62)
 
 C-3, C-13, C-14 and C-16 rest on suite law or R1 findings, and C-18..C-21 and C-29 are orchestrator / planner
 reconciliations, C-46 records E1 behaviour (U3 review r1, A3), and C-60 records the U8 B1 review r1 gaps (orchestrator, A21); the other rows are maintainer rulings (the Q-id, where one exists, and the option label are in the SPEC).
@@ -187,6 +187,16 @@ reconciliations, C-46 records E1 behaviour (U3 review r1, A3), and C-60 records 
 - C-60 U8B2-GAPS (A21; binding for U8 B2): (G1) the timed-loop fold and the VOID replay get a permanent npm-test gate in
   test/selftest.untimed.test.mjs (must-fail on a no-fold copy); (G2) markerClash cases: all 12 own lines joined in one
   output -> '', 2 clashing lines -> 2 clauses; (G3) the timed harness step (i) asserts >= 4 `SELFTEST   VOID ` lines.
+- C-61 REPROOF-ANCHOR (Q-REPROOF-ANCHOR (a) "Accept both forms", A22): bench/reproof.mjs buildMutant accepts exactly one match
+  of /T\[1\] = (?:PERF|performance)\.now\(\);/ (0 or >= 2 -> throws); test/reproof.judge.test.mjs keeps its verbatim-311761f
+  TR and pins both forms plus a 2-hit must-fail. The U9 restart planner re-checks reproof on the new G (C-48).
+- C-62 SELFTEST-INJECT (Q-ABDRIFT-LANE (a) "Force B reps", Q-WARMSKEW-ROUND (a) "Prime + tighten", Q-WARMSKEW-GUARD (a)
+  "Symmetric guard", Q-WARMSKEW-K (a) "K=3 for warm-skew"; A23, A24, A25): (1) the ab-drift child sets repsB = reps > 1 ? reps >>> 1 : 2 when sizing gave B A's reps, so
+  the C-11 AB column and REPS-DRIFT run on any lane; (2) the warm-skew child runs each AA entry once with __labWarm[0] = 1
+  before TF, then resets it, and its selftest row requires both VOID AA-DRIFT and VOID NOT-TF absent; (3) in that child every
+  column carries one guard of the same shape (only AA's reads __labWarm); (4) the row runs K = 3. Cold-path, injection-only: timedRounds /
+  windowProbe / tierSettle and the --selftest-untimed output stay byte-identical. A3 kill (with (3) applied; counted AA > 1.05 without
+  NOT-TF) -> the maintainer, Q-WARMSKEW-ROUND (b). Implementing unit: B15 (LEDGER B15).
 
 Open maintainer questions: none.
 
@@ -211,7 +221,7 @@ Main-file rungs E1 -> E2 -> J1 -> J2 are sequential; each unit = coder batch + r
 ## 4. FILLERS (carried open items; REPORTED, no design change without a new mechanism)
 
 - Q4: fixed-position AB outlier on the reps-1 lane (needs --trace-deopt).
-- Warm-skew at K = 1 is host-noise sensitive (fails closed).
+- Warm-skew at K = 1 (amended by C-62: the injection's deopt of AA (fixed) and single-sample host noise (the row runs K = 3, C-62 (4))).
 - Forged `AB:1/4` reps row nit.
 
 ## 5. AFTER 1.0

@@ -45,7 +45,7 @@ const addedKeys = (before, after) => after.filter((k) => !before.includes(k)).ma
 test('import adds 0 globalThis keys', () => {
   if (importError !== null) throw importError;
   assert.deepEqual(addedKeys(globalsBefore, globalsAfter), [], 'import added globalThis keys');
-  for (const k of ['__labSpin', '__labBox', '__labBoxN', '__labLate', '__labWarm']) assert.equal(Object.hasOwn(globalThis, k), false, k + ' exists after import');
+  for (const k of ['__labSpin', '__labBox', '__labBoxN', '__labLate', '__labWarm', '__labWarmOff']) assert.equal(Object.hasOwn(globalThis, k), false, k + ' exists after import');
 });
 test('import adds 0 globalThis keys: must-fail control (a string key and a symbol key added are both reported)', () => {
   const sym = Symbol('leak');
