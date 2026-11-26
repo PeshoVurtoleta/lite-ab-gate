@@ -254,16 +254,21 @@ LitePerfGate path (`LitePerfGate/.handoff/research/timing-ab/<same relative path
   asserts a test-file floor.
 - **Reopens with:** a test glob or runner change that again lets an empty run pass.
 
-### B2. Fail-closed workflow steps were checked by presence only, so `continue-on-error` / `|| true` / `set +e` / `|| echo` slipped through *(FOUND 2026-11-25, G-C B2 review r1 / r2; FIXED r3; REOPENED 2026-11-26 by FILL5 retry r3 probe P99, ruled C-57, open until FILL7 APPROVED)*
+### B2. Fail-closed workflow steps were checked by presence only, so `continue-on-error` / `|| true` / `set +e` / `|| echo` slipped through *(FOUND 2026-11-25, G-C B2 review r1 / r2; FIXED r3; REOPENED 2026-11-26 by FILL5 retry r3 probe P99, ruled C-57; FIXED 2026-11-26 burst 10 (FILL7, C-57))*
 - **What happened:** the docs.template test for templates/ab.yml and the ci.yml check asserted that the fail-closed
   steps were present. Review r1 REJECTED 2 LITERAL findings (presence-only fail-closed checks; ci concurrency on
-  main); r2 REJECTED 1 LITERAL (`|| echo` and `set +eo` still slipped); r3 APPROVED. The suite is now 13 checks / 60 mutants (M1..M60; was 37 at FILL3: U8 B3 added stopgate + M30..M33, FILL3 added M34..M37, the FILL5 retry added M38..M60; .handoff/COMMIT_MSG-U8B3.txt, COMMIT_MSG-FILL3.txt, B13).
+  main); r2 REJECTED 1 LITERAL (`|| echo` and `set +eo` still slipped); r3 APPROVED. The suite was then 13 checks / 60 mutants (FILL7 since: 71, see Gate) (M1..M60; was 37 at FILL3: U8 B3 added stopgate + M30..M33, FILL3 added M34..M37, the FILL5 retry added M38..M60; .handoff/COMMIT_MSG-U8B3.txt, COMMIT_MSG-FILL3.txt, B13).
 - **Root cause:** a check that a step exists does not see a neutralizer attached to it (`continue-on-error`, `|| true`,
   `set +e`, `|| echo`); the check passed on a workflow whose failure could not fail the job.
 - **Evidence:** .handoff/HISTORY.md (burst 3, G-C B2); .handoff/evidence/U4-GCB2-docs-template.log,
   U4-GCB2r2-docs-template.log, U4-GCB2r3-docs-template.log (gitignored run logs).
 - **Law:** law 4 (a gate fails open until a control proves it closed).
-- **Gate:** test/docs.template.test.mjs (a mutant per neutralizer form).
+- **Gate:** test/docs.template.test.mjs (a mutant per neutralizer form). FILL7 (C-57, review r1 2 LITERAL -> r2
+  APPROVED): every step of the ab job (both ab files) and of the ci.yml `test` job is pinned to a literal key set,
+  quoted keys normalized (`"k":` / `'k':`), step names / order / count pinned, a step-level `if:` read at the step's
+  own indent only; 13 checks / 71 mutants (M61..M71 added, M61 = P99), 96 tests in the file. Open remainder:
+  ci.yml job-level key pin (quoted job-level `"continue-on-error": true` / `"if": false` pass every check) -> new
+  FILLER, needs a maintainer ruling extending C-53.
 - **Reopens with:** a new way to neutralize a step's exit status that no mutant covers.
 
 ### B3. A d.ts gate outside the `npm test` glob and a test that skips when tsc is absent were vacuous passes *(FOUND 2026-11-25, G-A B3 review r1; FIXED r2)*

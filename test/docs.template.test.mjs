@@ -1,5 +1,6 @@
 // docs.template.test.mjs -- the workflow template drift guard (plan-GC TASK 6, ASSERTION 1; C-7, C-14, C-17, C-24, C-31;
-// plan-U8 TASK 5: the selftest STOP gate requires timed >= 1, and the summary names a red selftest NO VERDICT).
+// plan-U8 TASK 5: the selftest STOP gate requires timed >= 1, and the summary names a red selftest NO VERDICT;
+// FILL7 / C-57 STEPKEYS: every step of every checked job has its exact key set, plain or quoted, in failclosed).
 // DETERMINISTIC: reads templates/ab.yml, .github/workflows/ab.yml, .github/workflows/ci.yml and examples/ as TEXT
 // (zero deps: YAML parsed as lines) and checks them against ABGate.js's REQUIRED_FLAGS and EXIT. Teeth: every check also
 // runs on in-memory mutants of the real files; on each mutant exactly its own check must fail and every other check
@@ -177,6 +178,83 @@ function jobKeyProblems(f, t) {
     if (keys.slice().sort().join(',') !== JOB_KEYS.join(',')) p.push(f + ': job ab keys ' + JSON.stringify(keys) + ' (want ' + JOB_KEYS.join(',') + ')');
     return p;
 }
+// C-57 STEPKEYS (P99): every step of the checked job, in order, by name, with its exact top-level key set (sorted compare,
+// duplicates kept). Keys are read at the step's own indentation, plain or quoted ("k": / 'k': normalize to k), so a quoted
+// continue-on-error / shell / if cannot slip past the unquoted regex rows. Literal per step, never derived from the file.
+const STEP_KEYS_AB = Object.freeze([
+    ['runner identity', 'env,name,run'],
+    ['checkout', 'name,uses,with'],
+    ['setup node', 'name,uses,with'],
+    ['node is exactly the pin', 'env,name,run'],
+    ['gate file path', 'name,run'],
+    ['npm ci', 'name,run'],
+    ['provenance', 'name,run'],
+    ['selftest', 'name,run'],
+    [GATE_STEP, 'name,run'],
+    ['verdict to the job summary', 'env,if,name,run'],
+    ['upload logs', 'if,name,uses,with'],
+]);
+const STEP_KEYS_CI = Object.freeze([
+    ['checkout', 'name,uses,with'],
+    ['setup node', 'name,uses,with'],
+    ['provenance', 'name,run'],
+    ['node is exactly the verdict pin', 'env,if,name,run'],
+    ['npm ci', 'name,run'],
+    ['npm test', 'name,run'],
+    ['npm run torture', 'if,name,run'],
+]);
+// a MISSING step-level if: on these steps is left to the check that owns its presence; each owner reads the if: at the
+// step key indent (8) only, so an if: moved into a nested block or commented out fails the owner too (controls below:
+// dropped, moved). An extra if: anywhere and every other missing / extra key fail here
+const IF_OWNER = Object.freeze({ 'verdict to the job summary': 'always', 'upload logs': 'always', 'node is exactly the verdict pin': 'pin', 'npm run torture': 'ci' });
+// a key: double-quoted, single-quoted, or plain starting with a letter; anything else (? explicit key, { flow, & anchor,
+// * alias, a key with ': ' or '#' in it) does not parse and fails closed
+const STEP_KEY_RE = /^(?:"((?:[^"\\]|\\.)*)"|'((?:[^']|'')*)'|([A-Za-z_][^:#]*?))\s*:(?:\s|$)/;
+function stepKeyName(m) {
+    if (m[1] !== undefined) { try { return JSON.parse('"' + m[1] + '"'); } catch { return m[1]; } }   // an unknown escape stays raw: no allowed key, fails closed
+    if (m[2] !== undefined) return m[2].replaceAll("''", "'");
+    return m[3].trimEnd();
+}
+/** Problems of the steps: block (the one '    steps:' line, items '      - ' at indent 6, keys at indent 8) against `want`. */
+function stepKeyProblems(f, t, want) {
+    const ls = linesOf(t), p = [], tag = f + ': stepkeys ';
+    const at = ls.map((l, i) => (l === '    steps:' ? i : -1)).filter((i) => i >= 0);
+    if (at.length !== 1) return [tag + at.length + ' "    steps:" lines (want 1)'];
+    const items = [];
+    for (let j = at[0] + 1; j < ls.length; j++) {
+        const l = ls[j];
+        // before the comment / blank skip: a CR or tab inside a comment line is a YAML line break the line model cannot see
+        if (/[^\x20-\x7e]/.test(l)) { p.push(tag + 'line ' + (j + 1) + ': char outside printable ASCII'); continue; }
+        if (l.trim() === '' || l.trim().startsWith('#')) continue;
+        const ind = indentOf(l);
+        if (ind <= 4) break;
+        let rest;
+        if (ind === 6) {
+            const m = /^ {6}- (\S.*)$/.exec(l);
+            if (m === null) { p.push(tag + 'line ' + (j + 1) + ': indent-6 line is not "- <key>": ' + JSON.stringify(l)); continue; }
+            items.push({ line: j + 1, name: null, keys: [] });
+            rest = m[1];
+        } else if (ind === 8 && items.length > 0) rest = l.slice(8);
+        else if (ind > 8 && items.length > 0) continue;   // a nested value or block scalar line, not a step key
+        else { p.push(tag + 'line ' + (j + 1) + ': unexpected indent ' + ind + ': ' + JSON.stringify(l)); continue; }
+        const k = STEP_KEY_RE.exec(rest);
+        if (k === null) { p.push(tag + 'line ' + (j + 1) + ': key does not parse: ' + JSON.stringify(l)); continue; }
+        const it = items[items.length - 1], key = stepKeyName(k);
+        it.keys.push(key);
+        if (key === 'name') it.name = it.name === null ? rest.slice(k[0].length).trim() : '(two name keys)';
+    }
+    if (items.length !== want.length) p.push(tag + items.length + ' steps (want ' + want.length + ')');
+    for (let i = 0; i < Math.min(items.length, want.length); i++) {
+        const it = items[i], [name, keys] = want[i];
+        if (it.name !== name) { p.push(tag + 'step ' + (i + 1) + ' (line ' + it.line + ') is ' + JSON.stringify(it.name) + ' (want ' + JSON.stringify(name) + ')'); continue; }
+        const got = it.keys.slice().sort();
+        let exp = keys.split(',').sort();
+        if (Object.hasOwn(IF_OWNER, name) && !got.includes('if')) exp = exp.filter((x) => x !== 'if');
+        if (got.join(',') !== exp.join(',')) p.push(tag + 'step ' + name + ' keys ' + JSON.stringify(got) + ' (want ' + exp.join(',') + ')');
+    }
+    return p;
+}
+const isStepKeyProblem = (s) => / stepkeys /.test(s);
 // the timed-case count the selftest must report (ABGate.js selftest's summary line), as a POSIX ERE that JS reads alike;
 // accepts the timed run, rejects the untimed-only form and timed 0 (stopgate + the static row below)
 const COUNT_ERE = 'SELFTEST ran [0-9]+ of [0-9]+ \\(untimed [0-9]+, timed [1-9][0-9]*\\)';
@@ -282,7 +360,7 @@ const CHECKS = {
         const legs = [...w.ci.matchAll(/^\s+node: '(\d+\.\d+\.\d+)'\s*$/gm)].map((m) => m[1]);
         if (legs.length !== 2) p.push('ci.yml: ' + legs.length + ' x.y.z pin legs (want 2)');
         for (const l of legs) if (l !== pin) p.push('ci.yml: pin leg ' + l + ' != AB_NODE ' + pin);
-        const guard = stepsOf(w.ci).filter((s) => s.text.includes("if: matrix.node == '" + pin + "'"));
+        const guard = stepsOf(w.ci).filter((s) => s.text.includes("\n        if: matrix.node == '" + pin + "'\n"));
         if (guard.length !== 1) p.push('ci.yml: ' + guard.length + " steps guarded by if: matrix.node == '" + pin + "' (want 1)");
         else {
             const run = runBlocksOf(guard[0].text).map((r) => r.text).join('\n');
@@ -319,7 +397,7 @@ const CHECKS = {
             for (const name of ['verdict to the job summary', 'upload logs']) {
                 const s = st.filter((x) => x.name === name);
                 if (s.length !== 1) p.push(f + ': ' + s.length + ' steps named ' + name);
-                else if (!/^\s+if: always\(\)\s*$/m.test(s[0].text)) p.push(f + ': step ' + name + ' lacks if: always()');
+                else if (!/^ {8}if: always\(\)\s*$/m.test(s[0].text)) p.push(f + ': step ' + name + ' lacks if: always()');
             }
         }
         return p;
@@ -373,7 +451,7 @@ const CHECKS = {
     // no fail-open edit in any of the 3 workflows: no continue-on-error, no step shell override, if: only on the allowed
     // steps with the allowed condition, no '|| true' / '|| :' / '|| exit 0' / 'set +e' / 'set +o' in a run: block except
     // an exact allow-list (the gate step's one set +e, the 3 informational provenance reads); the selftest and gate
-    // run: blocks equal their exact text, selftest first
+    // run: blocks equal their exact text, selftest first; C-57: every step of every checked job has its exact key set
     failclosed(w) {
         const p = [];
         for (const [f, t, ifOk] of [...WFS(w).map(([f, t]) => [f, t, IF_OK_AB]), ['.github/workflows/ci.yml', w.ci, IF_OK_CI]]) {
@@ -412,6 +490,10 @@ const CHECKS = {
             if (n !== 1) p.push(f + ': ' + n + ' exact ImageOS guard lines (want 1): ' + IMAGEOS_LINE.trim());
         }
         for (const [f, t] of WFS(w)) p.push(...runnerIdProblems(f, t), ...jobEnvProblems(f, t), ...jobKeyProblems(f, t));
+        // C-57 STEPKEYS: every step's exact key set, plain or quoted (P99), in all 3 workflows (folded here: the step-level
+        // fail-open mutants M17 / M18 / M20 / M25 / M44 / M56..M58 already target failclosed, so a separate check would fail twice)
+        for (const [f, t] of WFS(w)) p.push(...stepKeyProblems(f, t, STEP_KEYS_AB));
+        p.push(...stepKeyProblems('.github/workflows/ci.yml', w.ci, STEP_KEYS_CI));
         for (const [f, t] of WFS(w)) {
             const st = stepsOf(t);
             const si = st.findIndex((s) => s.name === 'selftest'), gi = st.findIndex((s) => s.name === GATE_STEP);
@@ -468,7 +550,7 @@ const CHECKS = {
         const tor = step('npm run torture');
         if (tor.length !== 1 || !tor[0].text.includes('run: npm run torture')) p.push('step npm run torture missing');
         else {
-            const cond = /^\s+if: (.*)$/m.exec(tor[0].text);
+            const cond = /^ {8}if: (.*)$/m.exec(tor[0].text);
             if (cond === null || cond[1].trim() !== "startsWith(matrix.node, '26')") p.push('torture step is not gated on node 26 legs: ' + (cond === null ? 'no if:' : cond[1]));
             // the legs the condition selects: each OS on node 26 + each OS's 26.x.y pin leg = 4; never 22 / 24
             const all = [...osL.flatMap((o) => nodeL.map((n) => o + '@' + n)), ...extra];
@@ -585,6 +667,19 @@ const MUTANTS = [
     ['M58 unnamed uses step before runner identity (P6)', 'failclosed', mutant('both', '      - name: runner identity\n', '      - uses: ./x\n      - name: runner identity\n')],
     ['M59 CR hides container: after timeout-minutes (P8)', 'failclosed', mutant('both', '    timeout-minutes: 30\n', '    timeout-minutes: 30\r    container: node:22\n')],
     ['M60 quoted shell in defaults sets ImageOS (P4)', 'failclosed', mutant('both', '    shell: bash\n', '    "shell": env ImageOS=x bash -e {0}\n')],
+    // FILL7 (C-57 STEPKEYS): one per step class (A name,run / B env,name,run / C name,uses,with / D env,if,name,run /
+    // E if,name,uses,with / F if,name,run), each caught by the stepkeys row alone (control below)
+    ['M61 (P99) double-quoted continue-on-error on selftest (A)', 'failclosed', mutant('both', '      - name: selftest\n', '      - name: selftest\n        "continue-on-error": true\n')],
+    ['M62 single-quoted continue-on-error on the gate step (A)', 'failclosed', mutant('both', '      - name: gate (--run ALL)\n', "      - name: gate (--run ALL)\n        'continue-on-error': true\n")],
+    ['M63 unknown extra key on node is exactly the pin (B)', 'failclosed', mutant('both', '      - name: node is exactly the pin\n', '      - name: node is exactly the pin\n        x-extra: 1\n')],
+    ['M64 double-quoted if: false on checkout (C)', 'failclosed', mutant('both', '      - name: checkout\n        uses: actions/checkout@v7\n', '      - name: checkout\n        "if": false\n        uses: actions/checkout@v7\n')],
+    ['M65 single-quoted shell on the summary step (D)', 'failclosed', mutant('both', '      - name: verdict to the job summary\n', "      - name: verdict to the job summary\n        'shell': sh\n")],
+    ['M66 double-quoted continue-on-error on upload logs (E)', 'failclosed', mutant('both', '      - name: upload logs\n', '      - name: upload logs\n        "continue-on-error": true\n')],
+    ['M67 (P99 ci) double-quoted continue-on-error on ci torture (F)', 'failclosed', mutant('ci', '        run: npm run torture\n', '        run: npm run torture\n        "continue-on-error": true\n')],
+    ['M68 unknown extra key on ci npm test (A, ci)', 'failclosed', mutant('ci', '      - name: npm test\n', '      - name: npm test\n        x-extra: 1\n')],
+    ['M69 duplicate quoted run key on selftest (last key wins)', 'failclosed', mutant('both', "logs/selftest.log\n      # the step's status", "logs/selftest.log\n        \"run\": \"true\"\n      # the step's status")],
+    ['M70 missing uses on checkout (C)', 'failclosed', mutant('both', '      - name: checkout\n        uses: actions/checkout@v7\n', '      - name: checkout\n')],
+    ['M71 col-0 comment then single-quoted continue-on-error after selftest', 'failclosed', mutant('both', "logs/selftest.log\n      # the step's status", "logs/selftest.log\n# c\n        'continue-on-error': true\n      # the step's status")],
 ];
 
 // ---------------------------------------------------------------- tests
@@ -647,6 +742,66 @@ test('control (r3): M55..M60 each make the runner-identity / job-env / job-key r
     for (const [what, , mk] of sel) {
         const m = mk(WORLD, what);
         assert.ok(WFS(m).every(([f, t]) => runnerIdProblems(f, t).length + jobEnvProblems(f, t).length + jobKeyProblems(f, t).length !== 0), what);
+    }
+});
+test('control (C-57): the unmutated files give no stepkeys problem; M61..M71 are caught by the stepkeys row and by no other row', () => {
+    for (const [f, t] of WFS(WORLD)) assert.deepEqual(stepKeyProblems(f, t, STEP_KEYS_AB), [], f);
+    assert.deepEqual(stepKeyProblems('ci.yml', WORLD.ci, STEP_KEYS_CI), []);
+    const sel = MUTANTS.filter((m) => /^M(6[1-9]|7[01]) /.test(m[0]));
+    assert.equal(sel.length, 11);
+    for (const [what, , mk] of sel) {
+        const p = CHECKS.failclosed(mk(WORLD, what));
+        assert.ok(p.some(isStepKeyProblem), what + ': stepkeys row silent');
+        assert.deepEqual(p.filter((s) => !isStepKeyProblem(s)), [], what + ': another failclosed row also fires (not a gap probe)');
+    }
+});
+test('control (C-57): a missing if: on an IF_OWNER step fails exactly its owner check, never stepkeys (no gap, no double fail)', () => {
+    const drops = [
+        ['verdict to the job summary', mutant('both', '      - name: verdict to the job summary\n        if: always()\n', '      - name: verdict to the job summary\n')],
+        ['upload logs', mutant('both', '      - name: upload logs\n        if: always()\n', '      - name: upload logs\n')],
+        ['node is exactly the verdict pin', mutant('ci', "        if: matrix.node == '26.8.2'\n", '')],
+        ['npm run torture', mutant('ci', "        if: startsWith(matrix.node, '26')\n", '')],
+    ];
+    assert.deepEqual(drops.map((d) => d[0]).sort(), Object.keys(IF_OWNER).sort());
+    for (const [name, mk] of drops) {
+        const m = mk(WORLD, 'drop if: ' + name);
+        assert.deepEqual(failing(m), [IF_OWNER[name]], name);
+        assert.deepEqual(CHECKS.failclosed(m).filter(isStepKeyProblem), [], name);
+    }
+});
+test('control (C-57): quoted keys normalize; a key that does not parse, a bad indent or a CR inside a comment fails closed', () => {
+    const sel = (t) => edit(WORLD.template, '      - name: selftest\n', '      - name: selftest\n' + t, 'probe');
+    const keysOf = (t) => stepKeyProblems('t', sel(t), STEP_KEYS_AB).filter((s) => / step selftest keys | key does not parse| unexpected indent | char outside |two name keys/.test(s));
+    const probes = ['        "continue-on-error": true\n', "        'continue-on-error': true\n", '        "continue\\u002don-error": true\n', '        "continue\\x2don-error": true\n',
+        '        ? continue-on-error\n', '        { a: b }\n', '       x: 1\n', '# c\r        "continue-on-error": true\n', '        name: again\n', '        "run": "true"\n'];
+    for (const t of probes) assert.equal(keysOf(t).length, 1, JSON.stringify(t) + ' -> ' + JSON.stringify(keysOf(t)));
+    assert.deepEqual(keysOf(''), []);
+    assert.deepEqual(keysOf('        \n# c\n'), [], 'blank and col-0 comment lines are not keys');
+    assert.deepEqual(stepKeyProblems('t', WORLD.template.replace("      - name: selftest\n        run: |", "      - 'name': selftest\n        \"run\": |"), STEP_KEYS_AB), []);
+});
+test('control (C-57): an IF_OWNER if: moved below step level (nested block / comment) fails exactly its owner check', () => {
+    const moved = [
+        ['upload logs', mutant('both', '      - name: upload logs\n        if: always()\n        uses: actions/upload-artifact@v7\n        with:\n', '      - name: upload logs\n        uses: actions/upload-artifact@v7\n        with:\n          if: always()\n')],
+        ['verdict to the job summary', mutant('both', '        if: always()\n        env:\n          MOS: ${{ matrix.os }}\n', '        env:\n          MOS: ${{ matrix.os }}\n          if: always()\n')],
+        ['node is exactly the verdict pin', mutant('ci', "        if: matrix.node == '26.8.2'\n        env:\n          PIN: ${{ matrix.node }}\n", "        env:\n          PIN: ${{ matrix.node }}\n          if: matrix.node == '26.8.2'\n")],
+        ['node is exactly the verdict pin', mutant('ci', "        if: matrix.node == '26.8.2'\n", "        # if: matrix.node == '26.8.2'\n")],
+    ];
+    for (const [name, mk] of moved) assert.deepEqual(failing(mk(WORLD, 'moved if: ' + name)), [IF_OWNER[name]], name);
+});
+test('control (C-57): stepkeys pins step names, order and count (a renamed, reordered or appended step fails it alone)', () => {
+    const GP = '      - name: gate file path\n        run: |\n          case "$AB_GATE" in\n            /*|~*|*..*) echo "AB_GATE must be repo-relative, got: $AB_GATE"; exit 1 ;;\n          esac\n          test -f "$AB_GATE"\n';
+    const NC = '      - name: npm ci\n        run: |\n          npm ci --ignore-scripts\n          test -f "$AB_TOOL"\n';
+    const probes = [
+        ['renamed ci provenance', mutant('ci', '      - name: provenance\n', '      - name: info\n')],
+        ['npm ci swapped before gate file path', mutant('both', GP + NC, NC + GP)],
+        ['extra step appended after ci torture', mutant('ci', '        run: npm run torture\n', '        run: npm run torture\n      - name: extra\n        run: exit 0\n')],
+    ];
+    for (const [what, mk] of probes) {
+        const m = mk(WORLD, what);
+        assert.deepEqual(failing(m), ['failclosed'], what);
+        const p = CHECKS.failclosed(m);
+        assert.ok(p.some(isStepKeyProblem), what + ': stepkeys silent');
+        assert.deepEqual(p.filter((s) => !isStepKeyProblem(s)), [], what + ': another failclosed row fires');
     }
 });
 test('the real files are untouched by the mutants (in-memory only)', () => {
