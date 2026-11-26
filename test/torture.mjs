@@ -18,6 +18,21 @@
 // T2 retention: 20 cycles of runGate(toy, { oracleOnly: true, out }), each `out` tracked by @zakkster/lite-leak
 //   (cleanup null, tag a string: neither closes over `out`): tracker.size() === 0 after GC. Must-fail control: the
 //   20 outs kept in an array -> size() reads 20.
+// T-SETTLE (U9E plan TASK 6, A3; C-48): 3 fresh children of the tool on test/fixtures/settle/r1-frozen.gate.mjs (the
+//   R1 lane bounds:1e5:1e5, frozen only, relative paths), K=3. Each: exit 2; exactly 1 SETTLE line and it reads
+//   `settled=yes` with passes <= 3, one pass-bytes value per pass, the last exactly 0 and pass 1 > 0 (the non-vacuous
+//   tier witness, law 3: a lane already settled before the first pass proves nothing, so a pass-1 read of 0 FAILS);
+//   exactly 1 WINDOW line tool-bytes=0 scavenges=0; 0 B/op over 4 rounds x 15 entries (the RESULT bop columns x C);
+//   no VOID GC-WINDOW / TIER-SETTLE / NOT-TF; no STOP / CRASH.
+//   Must-fail control (on the R1 lane: toy:clean reads 0 B even unsettled, burst 8): AB_GATE_INJECT=no-settle prints
+//   the skipped marker (and no settled= line) and WINDOW tool-bytes > 0. Revert: a pre-U9E build prints no SETTLE line.
+// settle-void (A4): AB_GATE_INJECT=settle-void on toy:clean K=3 in a child: exit 2; exactly 1 SETTLE line passes=3
+//   settled=no; exactly 1 `VOID TIER-SETTLE` line whose 3 pass-bytes values are each parsed and each > 0 (the tool's
+//   own marker regex also accepts NaN) and equal the SETTLE line's; RESULT VOID=[..TIER-SETTLE..]; exactly 1 WINDOW
+//   line (one window, no re-run, C-7); VERDICT NO VERDICT. A K=3 toy:clean --run already reads NO VERDICT (run shape) with
+//   or without the VOID, so the VOID's verdict effect is gated by judge.extra's C-48 rows, not here.
+// T2b (A6): 5 in-process TIMED runGate(toy, { run: 'toy:clean', K: 3, out }) runs, each `out` tracked (cleanup null,
+//   tag a string): tracker.size() === 0 after GC, each exit 2. Must-fail control: the 5 outs kept -> size() reads 5.
 // The GATE line's gc numbers come from @zakkster/lite-gc-profiler over the 3 T1 runs: REPORTED only (the tool forces
 // its own collections: gcControl, gcWindow, the B/op windows), never gated here.
 // AB_TORTURE_TOOL=<path> runs every row against another build (revert check: the frozen pre-E2 build must fail).
@@ -53,6 +68,15 @@ const K = 3;
 const RUNS = 3;
 const CYCLES = 20;
 const WINDOW_RE = /^WINDOW lane=(\S+) tool-bytes=(-?\d+) scavenges=(\d+)$/;
+const SETTLE_GATE = join(HERE, 'fixtures', 'settle', 'r1-frozen.gate.mjs');
+const SETTLE_LANE = 'bounds:1e5:1e5';
+const SETTLE_RUNS = 3;
+const SETTLE_ENTRIES = 15;                  // the R1 lane's 5 bop columns (A B AA SLOW AB: reps differ) x C 3, a literal
+const T2B_RUNS = 5;
+// the tool's SETTLE grammar (C-48 / A14), retyped here (never imported from the tool): 1-3 pass-bytes values
+const SETTLE_RE = /^SETTLE lane=(\S+) passes=(\d+) pass-bytes=(\S+) settled=(yes|no)$/;
+const SKIP_RE = /^SETTLE lane=(\S+) skipped \(AB_GATE_INJECT=no-settle\)$/;
+const TSV_RE = /^VOID TIER-SETTLE lane=(\S+): TIER-SETTLE pass-bytes (\S+) \(cap 3, none read exactly 0\)$/;
 
 const { runGate, REQUIRED_FLAGS, C_COPIES } = await import(pathToFileURL(TOOL).href);
 const ENTRIES = 4 * C_COPIES;               // toy:clean: reps A = B (256), no AB column -> 4 columns x C (the toy declares no C)
@@ -176,6 +200,77 @@ else {
 }
 row(baseRed, 'T1 baseline frozen pre-E2 loop (must read red)', baseTxt + ' -> ' + (baseRed ? 'red' : 'NOT RED'));
 
+// ---- T-SETTLE (A3) + settle-void (A4): C-48 settle passes, each run in a fresh child ---------------------------------
+const linesOf = (text) => text.split('\n');
+// one comma list of pass-bytes values -> numbers; every value must be an integer or NaN (an empty or other token -> null)
+function passBytes(s) {
+    const v = s.split(',');
+    return v.every((x) => /^(?:-?\d+|NaN)$/.test(x)) ? v.map(Number) : null;
+}
+function settleLines(text) {
+    const all = linesOf(text).filter((l) => l.startsWith('SETTLE '));
+    const parsed = [];
+    for (const l of all) {
+        const m = SETTLE_RE.exec(l);
+        if (m !== null) parsed.push({ lane: m[1], passes: Number(m[2]), pb: passBytes(m[3]), pbText: m[3], settled: m[4] });
+    }
+    return { all, parsed, skipped: all.filter((l) => SKIP_RE.test(l)) };
+}
+const voidsOf = (text, kind) => linesOf(text).filter((l) => l.startsWith('VOID ' + kind + ' '));
+for (let i = 0; i < SETTLE_RUNS; i++) {
+    const r = child(TOOL, [SETTLE_GATE, '--run', SETTLE_LANE, '--K', String(K)], {});
+    const s = settleLines(r.text), w = windowsOf(r.text);
+    const p = s.parsed.length === 1 ? s.parsed[0] : null;
+    const pbOk = p !== null && p.pb !== null && p.pb.length === p.passes;
+    const settledOk = p !== null && p.lane === SETTLE_LANE && p.settled === 'yes' && p.passes >= 1 && p.passes <= 3 && pbOk &&
+        p.pb[p.passes - 1] === 0 && p.pb[0] > 0 && p.pb.every((x, j) => (x === 0) === (j === p.passes - 1));   // C-48: only the LAST pass reads 0
+    const res = linesOf(r.text).find((l) => l.startsWith('RESULT lane=' + SETTLE_LANE + ' ')) || '';
+    const bop = (/ bop=(\S+)/.exec(res) || [])[1];
+    const ents = bop === undefined ? 0 : bop.split(',').length * C_COPIES;
+    const wOk = w.length === 1 && w[0].lane === SETTLE_LANE && w[0].bytes === 0 && w[0].scav === 0;
+    const bopw = w.length === 1 && ents > 0 ? w[0].bytes / ((K + 1) * ents) : NaN;
+    const gcWin = voidsOf(r.text, 'GC-WINDOW').length, tsv = voidsOf(r.text, 'TIER-SETTLE').length, notTf = voidsOf(r.text, 'NOT-TF').length;
+    const stopped = has(r.text, /^(STOP|CRASH) /);
+    const ok = r.code === 2 && s.all.length === 1 && settledOk && wOk && ents === SETTLE_ENTRIES && bopw === 0 && gcWin === 0 && tsv === 0 && notTf === 0 && !stopped;
+    row(ok, 'T-SETTLE run ' + (i + 1) + '/' + SETTLE_RUNS, 'exit ' + r.code + ' (want 2) SETTLE lines ' + s.all.length + ' (want 1)' +
+        (p === null ? '' : ' [lane=' + p.lane + ' passes=' + p.passes + ' pass-bytes=' + p.pbText + ' settled=' + p.settled + ']') +
+        ' (want settled=yes, passes <= 3, one value per pass, only the last 0, pass 1 > 0) WINDOW lines ' + w.length + ' (want 1)' +
+        w.map((x) => ' [lane=' + x.lane + ' tool-bytes=' + x.bytes + ' scavenges=' + x.scav + ']').join('') + ' (want 0 / 0)' +
+        ' B/op ' + bopw + ' over ' + (K + 1) + ' rounds x ' + ents + ' entries (want 0 over ' + (K + 1) + ' x ' + SETTLE_ENTRIES + ')' +
+        ' VOID GC-WINDOW ' + gcWin + ' TIER-SETTLE ' + tsv + ' NOT-TF ' + notTf + ' (want 0) STOP/CRASH ' + stopped);
+}
+const rns = child(TOOL, [SETTLE_GATE, '--run', SETTLE_LANE, '--K', String(K)], { AB_GATE_INJECT: 'no-settle' });
+const sns = settleLines(rns.text), wns = windowsOf(rns.text);
+const nsRed = sns.skipped.length === 1 && sns.all.length === 1 && sns.parsed.length === 0 && wns.length === 1 && wns[0].lane === SETTLE_LANE && wns[0].bytes > 0;
+row(nsRed, 'T-SETTLE control no-settle on ' + SETTLE_LANE + ' (must read red)', 'exit ' + rns.code + ' skipped markers ' + sns.skipped.length +
+    ' SETTLE lines ' + sns.all.length + ' settled= lines ' + sns.parsed.length + ' (want 1 / 1 / 0) WINDOW ' +
+    wns.map((x) => 'tool-bytes=' + x.bytes + ' scavenges=' + x.scav).join(' | ') + ' (want 1 line, tool-bytes > 0) -> ' + (nsRed ? 'red' : 'NOT RED'));
+// settle-void (A4): one function frame for the row (flat module code, no bare scope block)
+function settleVoidRow() {
+    const r = child(TOOL, [TOY, '--run', LANE, '--K', String(K)], { AB_GATE_INJECT: 'settle-void' });
+    const s = settleLines(r.text), w = windowsOf(r.text);
+    const p = s.parsed.length === 1 ? s.parsed[0] : null;
+    const tl = voidsOf(r.text, 'TIER-SETTLE');
+    const tm = tl.length === 1 ? TSV_RE.exec(tl[0]) : null;
+    const tv = tm === null ? null : passBytes(tm[2]);
+    const tvOk = tm !== null && tm[1] === LANE && tv !== null && tv.length === 3 && tv.every((x) => x > 0);
+    const sOk = p !== null && s.all.length === 1 && p.lane === LANE && p.passes === 3 && p.settled === 'no' && tm !== null && p.pbText === tm[2];
+    const res = linesOf(r.text).find((l) => l.startsWith('RESULT lane=' + LANE + ' ')) || '';
+    // the VOID list as runLane prints it (the line's last field: ' VOID=[' + voids.join('; ') + ']'); items carry their own [..] ranges
+    const vm = / VOID=\[(.*)\]$/.exec(res);
+    const resVoid = vm !== null && vm[1].split('; ').some((x) => x.startsWith('TIER-SETTLE pass-bytes '));
+    const verdict = linesOf(r.text).filter((l) => l.startsWith('VERDICT '));
+    // K=3 --run reads NO VERDICT (run shape) with or without the VOID: the VOID's verdict effect is gated in judge.extra (C-48 rows)
+    const vOk = verdict.length === 1 && verdict[0].startsWith('VERDICT NO VERDICT');
+    const stopped = has(r.text, /^(STOP|CRASH) /);
+    const ok = r.code === 2 && tvOk && sOk && resVoid && w.length === 1 && w[0].lane === LANE && vOk && !stopped;
+    row(ok, 'settle-void (A4)', 'exit ' + r.code + ' (want 2) VOID TIER-SETTLE lines ' + tl.length + ' (want 1) values ' + (tv === null ? '(unparsed)' : tv.join(',')) +
+        ' (want exactly 3, each > 0) SETTLE ' + (p === null ? s.all.length + ' lines' : 'passes=' + p.passes + ' pass-bytes=' + p.pbText + ' settled=' + p.settled) +
+        ' (want 1 line, passes=3 settled=no, the VOID\'s values) RESULT VOID=[..TIER-SETTLE..] ' + resVoid + ' WINDOW lines ' + w.length + ' (want 1)' +
+        ' VERDICT ' + (verdict.length === 1 ? JSON.stringify(verdict[0].slice(0, 40)) : verdict.length + ' lines') + ' (want 1, NO VERDICT) STOP/CRASH ' + stopped);
+}
+settleVoidRow();
+
 // ---- T2: retention of `out` across oracle-only runs ---------------------------------------------------------------
 const warns = [];
 let collected = 0;
@@ -209,6 +304,37 @@ row(t2.size === 0 && t2.codes === '' && t2.findings === 0, 'T2 retention', CYCLE
 const t2c = await retention(true);
 const keepRed = t2c.size === CYCLES;
 row(keepRed, 'T2 control retained (must read red)', 'outs kept in an array: tracker.size()=' + t2c.size + ' (want ' + CYCLES + ') -> ' + (keepRed ? 'red' : 'NOT RED'));
+
+// ---- T2b (A6): retention of `out` across TIMED runs (the settle passes, the window, the B/op lane) -----------------
+async function retentionTimed(keep) {
+    const tracker = createLeakTracker({ name: keep ? 'ab-gate-timed-keep' : 'ab-gate-timed', onLeak: () => {}, onWarning: (w) => warns.push(w.kind + ':' + w.reason) });
+    tracker.registerKernel(createOwnerCascadeOrphanKernel());
+    const kept = [];
+    let codes = '';
+    // one run per call: `out` lives only in this frame (never in the loop's suspended registers)
+    const cycle = async (i) => {
+        const out = sinkOut();
+        const code = await runGate(TOY, { run: LANE, K, out });
+        tracker.track(out, null, 'timed-out#' + i);
+        if (keep) kept.push(out);
+        return code;
+    };
+    for (let i = 0; i < T2B_RUNS; i++) {
+        const code = await cycle(i);
+        if (code !== 2) codes += ' run ' + i + ' exit ' + code;
+    }
+    for (let a = 0; a < 20 && tracker.size() > 0; a++) { globalThis.gc(); await settle(20); }
+    const size = tracker.size(), findings = tracker.audit().length;
+    kept.length = 0;
+    return { size, findings, codes };
+}
+const t2b = await retentionTimed(false);
+row(t2b.size === 0 && t2b.codes === '' && t2b.findings === 0, 'T2b timed retention', T2B_RUNS + ' timed ' + LANE + ' K=' + K + ' runs: tracker.size()=' + t2b.size +
+    ' (want 0) findings=' + t2b.findings + (t2b.codes === '' ? ' every exit 2' : t2b.codes));
+const t2bc = await retentionTimed(true);
+const keepRedB = t2bc.size === T2B_RUNS;
+row(keepRedB, 'T2b control retained (must read red)', 'outs kept in an array: tracker.size()=' + t2bc.size + ' (want ' + T2B_RUNS + ') -> ' + (keepRedB ? 'red' : 'NOT RED') +
+    (t2bc.codes === '' ? '' : ' (' + t2bc.codes.trim() + ')'));
 
 // ---- A5 (G-B B4, plan-GB ASSERTION A5): allocRow + judge retention over the 114 judge rows -------------------------
 // DETERMINISTIC count rows (no timing claim). (a) allocRow, read from the tool's own `--selftest-untimed` allocBop row

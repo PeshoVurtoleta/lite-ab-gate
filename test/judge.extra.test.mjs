@@ -13,7 +13,8 @@
 // outcome controls (ALLOC, a negative bop, REPS-DRIFT stay labels: C-15), the U5b3 review rows for mutants M6 / M14, and
 // REPORTED-label tests for the C-11 labels that C-50 / C-51 now cover at verdict level (M13, C11b, C11c). U5c after SPEC A18
 // adds the C-54 (the rest of the RESULT line) and C-55 (a negative bop) rows; the negative-bop control became a C-55 row.
-// SPEC A19 adds the C-56 rows (the RESULT field set / order, a VOID tail, finite C-54 numbers).
+// SPEC A19 adds the C-56 rows (the RESULT field set / order, a VOID tail, finite C-54 numbers). U9E B3 adds the C-48
+// TIER-SETTLE rows (a gated lane whose settle cap is hit, and its settled control), from the CURRENT C-48 text.
 // MIT (c) Zahary Shinikchiev <shinikchiev@yahoo.com>. ASCII only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -61,6 +62,20 @@ const NVS = 'VERDICT NO VERDICT (run shape)';
 const onR = (ls, f) => ls.map((l) => (l.startsWith('RESULT lane=y:r ') ? f(l) : l));
 const onW = (ls, f) => ls.map((l) => (l.startsWith('WARM lane=y:r ') ? f(l) : l));
 const onRaw = (ls, f) => ls.map((l) => (l.startsWith('RAW lane=y:r ') ? f(l) : l));
+// C-48 (U9E): runLane prints SETTLE + WINDOW before a lane's RESULT and its VOID lines after WARM; settled=no -> the
+// RESULT VOID=[TIER-SETTLE ..] tail + a 'VOID TIER-SETTLE lane=<id>: ..' line (the grammar of C-48 / A14)
+const TSV = 'TIER-SETTLE pass-bytes 7968,7968,7968 (cap 3, none read exactly 0)';
+function settleLog(voidOn) {
+    const out = [];
+    for (const l of log()) {
+        const r = /^RESULT lane=(\S+) /.exec(l), w = /^WARM lane=(\S+) /.exec(l);
+        if (r !== null) out.push(r[1] === voidOn ? 'SETTLE lane=' + r[1] + ' passes=3 pass-bytes=7968,7968,7968 settled=no' : 'SETTLE lane=' + r[1] + ' passes=1 pass-bytes=0 settled=yes',
+            'WINDOW lane=' + r[1] + ' tool-bytes=0 scavenges=0');
+        out.push(r !== null && r[1] === voidOn ? l + ' VOID=[' + TSV + ']' : l);
+        if (w !== null && w[1] === voidOn) out.push('VOID TIER-SETTLE lane=' + w[1] + ': ' + TSV);
+    }
+    return out;
+}
 const DIF3 = ' ab=1.800[1.790..1.810] B/AB=1.000[0.990..1.010] wordAB=WITHIN ', EQ3 = ' ab=n/a B/AB=n/a wordAB=n/a ';
 // [name, SPEC rule the row encodes, log, exit, VERDICT prefix, substring of the text before ' | cpu ' (or null)]
 const ROWS = [
@@ -334,10 +349,16 @@ const ROWS = [
         () => onR(log(), (l) => l.replace(',SLOW:0.0000 ', ',SLOW:0.0000,AB:0.0000 ') + ' bop=A:0.0000'), 2, NVS, 'RESULT lane=y:r bop holds 1 AB: entries with equal reps'],
     ['C-47b REPORTED lane reps differ, the AB: entry renamed ABX: is run shape (M6)', 'C-47 (reps differ: exactly one AB: entry)',
         () => onR(log({ ab: 'y:r' }), (l) => l.replace(',AB:0.0000 ', ',ABX:0.0000 ')), 2, NVS, 'RESULT lane=y:r bop holds 0 AB: entries with reps'],
+    // C-48 (U9E): a settle cap hit is VOID TIER-SETTLE, never PASS; on the gated lane it is NO VERDICT (gated lane not clean).
+    // Control: the same log with every lane settled=yes and no VOID reads PASS (SETTLE / WINDOW lines are not VOIDs).
+    ['C-48 gated lane SETTLE settled=no + VOID=[TIER-SETTLE ..] + its VOID TIER-SETTLE line is NO VERDICT', 'C-48 (cap hit -> VOID TIER-SETTLE, never PASS) + C-15',
+        () => settleLog('y:g'), 2, 'VERDICT NO VERDICT (gated lane not clean)', 'y:g VOID(TIER-SETTLE) + VOID-line(TIER-SETTLE)'],
+    ['C-48 control: SETTLE settled=yes + WINDOW lines on both lanes, no VOID, reads PASS', 'C-48 (settled lanes) + C-15',
+        () => settleLog(null), 0, 'VERDICT PASS gated=1/1', null],
 ];
 
-test('judge.extra: the table has 115 rows with unique names (8 U7 + 14 C-34 + 6 C-42 + 18 C-47 + 5 C-50 + 6 C-40 + 3 C-41 + 20 C-51 + 21 C-54 + 3 C-55 + 11 C-56)', () => {
-    assert.equal(ROWS.length, 115);
+test('judge.extra: the table has 117 rows with unique names (8 U7 + 14 C-34 + 6 C-42 + 18 C-47 + 5 C-50 + 6 C-40 + 3 C-41 + 20 C-51 + 21 C-54 + 3 C-55 + 11 C-56 + 2 C-48)', () => {
+    assert.equal(ROWS.length, 117);
     assert.equal(new Set(ROWS.map((r) => r[0])).size, ROWS.length);
 });
 

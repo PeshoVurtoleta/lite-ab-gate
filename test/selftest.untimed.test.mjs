@@ -235,6 +235,7 @@ const OTHERS = [
     'RESULT lane=jl:clean (gated) A=1.00[1.00..1.00] B=1.00[1.00..1.00] ns/op B/A=1.000[0.990..1.010] word=WITHIN B-A=0.00[0.00..0.00]ns aa=1.312[1.290..1.330] slow=1.002[0.991..1.010] ab=n/a B/AB=n/a wordAB=n/a bop=A:0.0000,B:16.0000,AA:0.0000,SLOW:0.0000 win=8 reps=A:1,B:1 spin=8 warm=1 VOID=[AA-DRIFT 1.312[1.290..1.330]; SLOW-DEAD 1.002[0.991..1.010]; ALLOC B 16.000 B/op]',
     'SELFTEST   STOP ANCHOR: frozen-sha frozen/k.js sha256 12345678 (want 2a83d841)',
     'SELFTEST   WARM lane=jl:clean round 0 (discarded, not in any median) A/A=1.0000 B/A=0.9981 AA/A=1.9124 SLOW/A=2.4410',
+    'SETTLE lane=jl:clean passes=1 pass-bytes=0 settled=yes',   // U9E (C-48): the ordinary SETTLE line of every timed lane
 ];
 const NAMES = ['bent-oracle', 'boxed', 'slow-dead', 'aa-drift', 'live-drift', 'frozen-drift', 'late-bend', 'post-bend', 'ab-drift', 'warm-skew', 'arr-bend', 'tool-deopt', 'no-settle', 'settle-void'];
 
@@ -279,6 +280,13 @@ test('marker gate (C-21): each of the 14 INJECTIONS markers is an anchored RegEx
     // (6) a global RegExp (RegExp.prototype.test is stateful with g): rejected
     const gl = reasons(withMarker('aa-drift', new RegExp(table['aa-drift'].marker.source, 'gm')));
     assert.ok(gl.some((s) => s.startsWith('aa-drift: marker ') && s.endsWith('not anchored ^ / m, or stateful (g / y)')), gl.join('\n'));
+    // (7) U9E: a no-settle marker loosened to /^SETTLE lane=/m matches the ordinary SETTLE line every timed lane prints: rejected;
+    // without that OTHERS line the loosened marker would pass (the OTHERS line is what gives this control its teeth)
+    const SETTLE_OK = 'SETTLE lane=jl:clean passes=1 pass-bytes=0 settled=yes';
+    assert.ok(OTHERS.includes(SETTLE_OK));
+    const loose = withMarker('no-settle', /^SETTLE lane=/m);
+    assert.deepEqual(reasons(loose), ['no-settle: also matches ' + JSON.stringify(SETTLE_OK)]);
+    assert.deepEqual(markerGate(loose, rendered, others.filter((l) => l !== SETTLE_OK)), [], 'without the ordinary SETTLE line the loosened marker is accepted');
 });
 
 // ============================================================ CLI: --selftest-untimed takes no other flag

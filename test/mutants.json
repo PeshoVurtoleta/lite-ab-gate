@@ -1462,6 +1462,56 @@
         "test/judge.rows.test.mjs",
         "test/judge.extra.test.mjs"
       ]
+    },
+    {
+      "id": "S1-settleLe0",
+      "group": "C-48",
+      "why": "C-48: settled only on a read exactly 0 (===); <= 0 settles on a negative read (killer: R3 [-1,0], and null / false / '' / [] / '0')",
+      "find": "if (b === 0) return i + 1;",
+      "replace": "if (b <= 0) return i + 1;",
+      "files": [
+        "test/settle.test.mjs"
+      ]
+    },
+    {
+      "id": "S2-settleNotGt0",
+      "group": "C-48",
+      "why": "C-48: NaN is not settled; !(b > 0) settles on NaN, a negative and every non-number (killer: R2 [NaN,0], R8, R14 undefined)",
+      "find": "if (b === 0) return i + 1;",
+      "replace": "if (!(b > 0)) return i + 1;",
+      "files": [
+        "test/settle.test.mjs"
+      ]
+    },
+    {
+      "id": "S3-settleCap4",
+      "group": "C-48",
+      "why": "C-48: cap 3; cap 4 runs a 4th pass (killer: R7 [7,7,7,0] -> 0 after exactly 3 calls)",
+      "find": "const TIER_SETTLE_CAP = 3;",
+      "replace": "const TIER_SETTLE_CAP = 4;",
+      "files": [
+        "test/settle.test.mjs"
+      ]
+    },
+    {
+      "id": "S4-settleCap2",
+      "group": "C-48",
+      "why": "C-48: cap 3; cap 2 never runs pass 3 (killer: R6 [7,7,0] -> 3 / 3)",
+      "find": "const TIER_SETTLE_CAP = 3;",
+      "replace": "const TIER_SETTLE_CAP = 2;",
+      "files": [
+        "test/settle.test.mjs"
+      ]
+    },
+    {
+      "id": "H1-perfUnhoist",
+      "group": "C-48-hoist",
+      "why": "C-48 PERF hoist reverted: timedRounds reads the global performance again (killer: hotbody A1, 0 PERF.now() / 2 performance)",
+      "find": "T[0] = PERF.now();\n            const got = e.run(e.state, st, n, e.reps);\n            T[1] = PERF.now();",
+      "replace": "T[0] = performance.now();\n            const got = e.run(e.state, st, n, e.reps);\n            T[1] = performance.now();",
+      "files": [
+        "test/hotbody.parity.test.mjs"
+      ]
     }
   ]
 }

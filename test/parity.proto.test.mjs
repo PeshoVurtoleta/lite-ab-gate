@@ -3,8 +3,8 @@
 //   toy --oracle-only, masked (timing: false) == golden/toy-oracle-only.log: 0 differing lines.
 //   the three CLI STOPs == golden/cli.log blocks.
 // Declared diffs (plan-GA "Parity"): the usage text (program name ab-proto.mjs -> ABGate.js), the 4 ANCHOR texts, the
-// frozen-only HEADER line, and the additive WINDOW line. The toy lane binds live, stops nowhere and runs no clock, so on
-// these runs NONE of them may appear: a declared-diff line showing up here is itself a failure (nothing hides in the allowance).
+// frozen-only HEADER line, the additive WINDOW line and the additive SETTLE line (U9E, C-48). The toy lane binds live,
+// stops nowhere and runs no clock, so on these runs NONE of them may appear: a declared-diff line showing up here is itself a failure (nothing hides in the allowance).
 // The golden's expected text is read from the golden file, never from ABGate.js output. The r1 lane is `npm run parity:r1`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,8 +22,10 @@ const env = () => { const e = { ...process.env }; delete e.AB_GATE_INJECT; delet
 const run = (args) => { const r = spawnSync(process.execPath, [...FLAGS, join(ROOT, 'ABGate.js'), ...args], { cwd: TOY, encoding: 'utf8', env: env(), timeout: 120000 }); return { status: r.status, out: r.stdout || '', err: r.stderr || '' }; };
 
 // Declared-diff line shapes (they are the ONLY lines the compare may ignore, and only when the caller allows them).
-const DECLARED = [/^WINDOW lane=/, /^STOP ANCHOR: /, /^STOP CLI: usage: /, / live not bound \(frozen only\)$/];
-const isDeclared = (l) => DECLARED.some((re) => re.test(l));
+const DECLARED = [/^WINDOW lane=/, /^SETTLE lane=/, /^STOP ANCHOR: /, /^STOP CLI: usage: /, / live not bound \(frozen only\)$/];
+const isDeclared = (l, decl = DECLARED) => decl.some((re) => re.test(l));
+/** The declared-diff lines present in a run output (the oracle-only / CLI runs must print none). */
+const declaredIn = (out, decl = DECLARED) => out.split('\n').filter((l) => isDeclared(l, decl));
 
 /** Number of differing lines between two texts (position by position; a length difference counts the extra lines). */
 function diffCount(a, b) {
@@ -39,7 +41,7 @@ test('toy --oracle-only, masked, equals golden/toy-oracle-only.log: 0 differing 
     const r = run(['toy-lane.mjs', '--oracle-only']);
     assert.equal(r.status, 0, r.err + r.out.slice(0, 300));
     assert.equal(r.err, '');
-    assert.deepEqual(r.out.split('\n').filter(isDeclared), [], 'a declared-diff line appeared on a run that must have none');
+    assert.deepEqual(declaredIn(r.out), [], 'a declared-diff line appeared on a run that must have none');
     const masked = maskLog(r.out, { timing: false });
     assert.equal(diffCount(masked, golden), 0);
     assert.equal(masked, golden);
@@ -54,6 +56,28 @@ test('parity controls: the compare sees a changed line, a dropped line, an extra
     assert.ok(diffCount('WINDOW lane=toy:clean tool-bytes=0 scavenges=0\n' + golden, golden) > 0, 'an extra WINDOW line must show (it is not hidden by the compare)');
     const raw = run(['toy-lane.mjs', '--oracle-only']).out;
     assert.ok(diffCount(raw, golden) >= 4, 'the raw output must differ from the golden at the host fields (so the mask is doing the work)');
+});
+
+// U9E (C-48): SETTLE lines are declared (a timed lane prints one before its window); the oracle-only run prints none. The
+// control: a SETTLE line on that run is caught by the no-declared-line check, and by the compare; with /^SETTLE lane=/
+// left out of DECLARED the check is blind to it (so the declaration is what carries the check).
+test('parity control: an undeclared extra SETTLE line on the oracle-only run reads red (declared check + compare)', () => {
+    const golden = readFileSync(join(GOLD, 'toy-oracle-only.log'), 'utf8');
+    const lines = [
+        'SETTLE lane=toy:clean passes=1 pass-bytes=0 settled=yes',
+        'SETTLE lane=toy:clean passes=3 pass-bytes=64,64,64 settled=no',
+        'SETTLE lane=toy:clean skipped (AB_GATE_INJECT=no-settle)',
+    ];
+    const noSettle = DECLARED.filter((re) => re.source !== '^SETTLE lane=');
+    assert.equal(noSettle.length, DECLARED.length - 1, 'DECLARED holds /^SETTLE lane=/ exactly once');
+    assert.deepEqual(declaredIn(golden), [], 'the golden itself holds no declared-diff line');
+    for (const s of lines) {
+        const forged = s + '\n' + golden;
+        assert.deepEqual(declaredIn(forged), [s], 'the declared check must see ' + s);
+        assert.deepEqual(declaredIn(forged, noSettle), [], 'without /^SETTLE lane=/ the check is blind to ' + s);
+        assert.ok(diffCount(forged, golden) > 0, 'an extra SETTLE line must show in the compare');
+    }
+    assert.equal(isDeclared('XSETTLE lane=toy:clean passes=1 pass-bytes=0 settled=yes'), false, 'anchored: a SETTLE mid-line is not declared');
 });
 
 test('the three CLI STOPs equal golden/cli.log (usage program name is the one declared diff)', () => {

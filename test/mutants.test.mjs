@@ -1,5 +1,6 @@
 // test/mutants.test.mjs -- G-B B4 (U7): plan-GB TASK 8, ASSERTION A3 (teeth). DETERMINISTIC (C-3): no clock; every
-// child is a `node --test` run of row suites, or (M2 only) of selftest.untimed, whose children stop before the clock.
+// child is a `node --test` run of row suites, or (M2 only) of selftest.untimed, whose children stop before the clock, or
+// (U9E C-48) of settle.test / hotbody.parity, which read source text only.
 // Each mutant in test/mutants.json is an EXACT-ONCE replacement in a temp copy of ABGate.js (a site that does not match
 // exactly once is a FAIL, never a skip). The temp layout is <tmp>/ABGate.js + <tmp>/test/<the real test files, copied
 // byte for byte> + <tmp>/test/fixtures/<copies>, so the SAME rows (the 55 golden parity rows, the 59 judge.rows rows,
@@ -20,8 +21,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SRC = readFileSync(join(ROOT, 'ABGate.js'), 'utf8');
 const DOC = JSON.parse(readFileSync(join(ROOT, 'test', 'mutants.json'), 'utf8'));
 const M = DOC.mutants;
-const ALLOWED = ['test/parity.abgate.test.mjs', 'test/judge.rows.test.mjs', 'test/judge.extra.test.mjs', 'test/selftest.untimed.test.mjs'];
-const FIXTURES = ['ab-gate-7e0f9262', 'judge-lane', 'reproof'];   // reproof: judge.extra's real-log row (U5c review r1)
+const ALLOWED = ['test/parity.abgate.test.mjs', 'test/judge.rows.test.mjs', 'test/judge.extra.test.mjs', 'test/selftest.untimed.test.mjs', 'test/settle.test.mjs', 'test/hotbody.parity.test.mjs'];
+const FIXTURES = ['ab-gate-7e0f9262', 'judge-lane', 'reproof', 'hotbody'];   // reproof: judge.extra's real-log row (U5c review r1); hotbody: the A1 golden (U9E)
 // plan-GB A3: 29 = 10 r0 FLIPS + 8 C-11 + 3 C-12 + 6 HEADER/PROV + the belt + a dialect leak; then the U5 reviewer
 // survivors (M14, M16, M17 x2, R2 x2) and the U6 runner check M2 (killer: selftest.untimed); C-34 (U5b, + the 2
 // twice-printed AB mutants of review r1 blocker 2) and C-42 (U5b retry: RESULT reps unparsed / printed twice, any lane);
@@ -29,8 +30,9 @@ const FIXTURES = ['ab-gate-7e0f9262', 'judge-lane', 'reproof'];   // reproof: ju
 // + 3 C-50 (RESULT reps AB part, any lane); U5c: + 7 C-40 (WARM column grammar / finite values, any lane) + 3 C-41 (RAW
 // column set) + 12 C-51 (RESULT ab / B/AB / wordAB / bop grammar, any lane) + 3 U5b3 reviewer survivors (M6, M13, M14); SPEC A18: + 17 C-54 (the rest of the RESULT line, any lane) + 3 C-55
 // (a negative bop value); SPEC A19: + 8 C-56 (the RESULT field set / order, the VOID tail, finite C-54 numbers); U5c review r1: + 6 (reviewer R1 / R2 / R3 / R4 / R11 +
-// the blocker-1 bare ns/op check)
-const GROUPS = { 'r0-flip': 10, 'C-11': 8, 'C-12': 3, 'header-prov': 6, belt: 1, dialect: 1, 'u5-survivor': 6, 'u6-runner': 1, 'C-34': 8, 'C-42': 5, 'C-47': 11, 'C-50': 3, 'C-40': 7, 'C-41': 3, 'C-51': 12, 'u5b3-review': 3, 'C-54': 17, 'C-55': 3, 'C-56': 8, 'u5c-review': 6 };
+// the blocker-1 bare ns/op check); U9E B3: + 4 C-48 (tierSettle; killer test/settle.test.mjs) + 1 C-48 PERF hoist
+// (killer test/hotbody.parity.test.mjs)
+const GROUPS = { 'r0-flip': 10, 'C-11': 8, 'C-12': 3, 'header-prov': 6, belt: 1, dialect: 1, 'u5-survivor': 6, 'u6-runner': 1, 'C-34': 8, 'C-42': 5, 'C-47': 11, 'C-50': 3, 'C-40': 7, 'C-41': 3, 'C-51': 12, 'u5b3-review': 3, 'C-54': 17, 'C-55': 3, 'C-56': 8, 'u5c-review': 6, 'C-48': 4, 'C-48-hoist': 1 };
 const CONCURRENCY = 4;
 
 const tmps = [];
@@ -95,7 +97,7 @@ function judgeKill(r, control) {
 }
 const mutate = (find, replace) => { const at = onceAt(SRC, find); return at < 0 ? null : SRC.slice(0, at) + replace + SRC.slice(at + find.length); };
 
-test('mutants.json: schema, unique ids, group counts (A3 29 + 6 U5 survivors + 1 U6 runner + 8 C-34 + 5 C-42 + 11 C-47 + 3 C-50 + 7 C-40 + 3 C-41 + 12 C-51 + 3 U5b3 review + 17 C-54 + 3 C-55 + 8 C-56 + 6 U5c review), every site exactly once', () => {
+test('mutants.json: schema, unique ids, group counts (A3 29 + 6 U5 survivors + 1 U6 runner + 8 C-34 + 5 C-42 + 11 C-47 + 3 C-50 + 7 C-40 + 3 C-41 + 12 C-51 + 3 U5b3 review + 17 C-54 + 3 C-55 + 8 C-56 + 6 U5c review + 4 C-48 + 1 C-48 hoist), every site exactly once', () => {
     assert.ok(Array.isArray(M), 'mutants must be an array');
     const ids = new Set();
     const groups = {};
@@ -117,7 +119,7 @@ test('mutants.json: schema, unique ids, group counts (A3 29 + 6 U5 survivors + 1
     assert.deepEqual(groups, GROUPS);
     const a3 = ['r0-flip', 'C-11', 'C-12', 'header-prov', 'belt', 'dialect'].reduce((s, g) => s + groups[g], 0);
     assert.equal(a3, 29, 'plan-GB A3 names 29 mutants');
-    assert.equal(M.length, 122);
+    assert.equal(M.length, 127);
 });
 
 describe('A3 mutants: each turns >= 1 row red (an assertion, same test count as the control); the control turns 0 red', { concurrency: CONCURRENCY }, () => {
