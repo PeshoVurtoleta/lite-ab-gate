@@ -13,13 +13,13 @@
 //       Exit 0 PASS | 2 PENDING / NO VERDICT | 3 KILL | 1 STOP.
 //
 // The statistic (C-36, plan-U9-v1 SPEC, pre-registered, law 5): per gated lane and valid hold
-//   r = (G1 + G2) / (P1 + P2) on the RESULT B/A medians (and the same on B/AB where both tools print it);
+//   r = (G1 + G2) / (P1 + P2) on the RESULT B/A medians; r(B/AB) likewise where both print it: REPORTED, never banded (C-69, U9F);
 //   twin t = P2 / P1 (B/A); mutant r' = 2 M / (G1 + G2), judged on its 5-hold median only (C-45).
 //   A G KILL fact in an INVALID hold still KILLs (C-45); G tool-bytes > 0 on any gated lane = KILL (C-43).
-//   PASS    = 5 valid holds AND median-over-holds r in [0.98, 1.02] on every gated lane (B/A and B/AB) AND every
+//   PASS    = 5 valid holds AND median-over-holds r in [0.98, 1.02] on every gated lane (B/A) AND every
 //             per-hold r in [0.95, 1.05] AND the mutant fires (median r' > 1.02 on every gated lane).
 //   KILL    = a FINDING from G; a NOT-TF tool line from G; G tool-bytes != 0; GC-WINDOW major > 0 in G; > 1 VOID in
-//             the 10 G runs whose paired P run was clean; any r outside its interval.
+//             the 10 G runs whose paired P run was clean; any r(B/A) outside its interval.
 //   INVALID = (hold, exit 2, PENDING) a P VOID or P FINDING (C-45); t outside the A/A band [0.95, 1.05] (C-44); an M VOID; a non-empty busy-node
 //             or a quiet-lock state other than `quiet` in any PROV line; outer.log COLD settled=no (C-67: the outer and
 //             its parent pid never both read < 10 % CPU on 2 consecutive polls, the first at outer uptime >= 2000 ms,
@@ -78,6 +78,9 @@ const HEX64 = /^[0-9a-f]{64}$/;
 export const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 const inBand = (x, lo, hi) => x >= lo && x <= hi;   // NaN -> false (fail closed)
 const fx = (v) => (typeof v === 'number' ? v.toFixed(4) : 'n/a');
+const RAB_TIER = ' rAB-tier=REPORTED(U9F)';   // C-69 (A39 / A40): r(B/AB) is printed, never banded
+/** laneText(id, s) -> '<id> r= rAB= t= rM= rAB-tier=REPORTED(U9F)': one hold's lane line (JUDGE lane, --judge). */
+export function laneText(id, s) { return id + ' r=' + fx(s.r[id]) + ' rAB=' + fx(s.rAB[id]) + ' t=' + fx(s.t[id]) + ' rM=' + fx(s.rM[id]) + RAB_TIER; }
 
 // ---------------------------------------------------------------- statistics (C-4 definitions, own code)
 function quant(sorted, p) {
@@ -463,12 +466,11 @@ export function judgeHold(hold, opts = {}) {
     res.status = kill.length > 0 ? 'KILL' : invalid.length > 0 ? 'INVALID' : 'VALID';
     return res;
 }
-/** holdBand(summary) -> KILL reasons: a per-hold r (B/A, B/AB) outside [0.95, 1.05]. Applied to valid holds only. */
+/** holdBand(summary) -> KILL reasons: a per-hold r (B/A) outside [0.95, 1.05]. Applied to valid holds only. */
 export function holdBand(s) {
     const out = [];
     for (const id of LANES) {
         if (!inBand(s.r[id], BAND.holdLo, BAND.holdHi)) out.push(id + ' r(B/A)=' + fx(s.r[id]) + ' outside [' + BAND.holdLo + ', ' + BAND.holdHi + ']');
-        if (Object.hasOwn(s.rAB, id) && !inBand(s.rAB[id], BAND.holdLo, BAND.holdHi)) out.push(id + ' r(B/AB)=' + fx(s.rAB[id]) + ' outside [' + BAND.holdLo + ', ' + BAND.holdHi + ']');
     }
     return out;
 }
@@ -499,7 +501,6 @@ export function decide(sums, opts = {}) {
             const abs = valid.map((s) => s.rAB[id]);
             if (abs.every((v) => typeof v === 'number')) {
                 med.rAB[id] = median(abs);
-                if (!inBand(med.rAB[id], BAND.medLo, BAND.medHi)) reasons.push('KILL ' + id + ' median r(B/AB)=' + med.rAB[id].toFixed(4) + ' outside [' + BAND.medLo + ', ' + BAND.medHi + ']');
             } else if (abs.some((v) => typeof v === 'number')) reasons.push('STOP ' + id + ' B/AB present in some holds only');
             if (!(med.rM[id] > BAND.fire)) reasons.push('STOP mutant did not fire on ' + id + ': median r\'=' + med.rM[id].toFixed(4) + ' (want > ' + BAND.fire + ')');
         }
@@ -690,7 +691,7 @@ export function holdMain(argv) {
     put('LOAD end ' + la());
     put('BUSY end [' + busyNodes() + ']');
     const s = judgeHold({ outer: lines.join('\n') + '\n', logs }, { gSha: a['--tool-sha'] });
-    for (const id of LANES) put('JUDGE lane ' + id + ' r=' + fx(s.r[id]) + ' rAB=' + fx(s.rAB[id]) + ' t=' + fx(s.t[id]) + ' rM=' + fx(s.rM[id]));
+    for (const id of LANES) put('JUDGE lane ' + laneText(id, s));
     for (const x of s.stop) put('JUDGE stop ' + x);
     for (const x of s.invalid) put('JUDGE invalid ' + x);
     const band = s.status === 'VALID' ? holdBand(s) : [];
@@ -716,15 +717,21 @@ export function judgeMain(argv) {
     if (!HEX64.test(a['--tool-sha'] || '')) return stopNow('--judge requires --tool-sha <64 lowercase hex> (the frozen RC G)');
     const opts = { harnessSha: sha256(readFileSync(ME)), gSha: a['--tool-sha'] };
     const j = judgeHolds(readHolds(resolve(a['--judge'])), opts);
-    for (const s of j.holds) {
-        process.stdout.write('HOLD ' + s.n + ' ' + s.status + (s.excluded ? ' (EXCLUDED: harness changed)' : '') + '\n');
-        for (const id of LANES) process.stdout.write('  ' + id + ' r=' + fx(s.r[id]) + ' rAB=' + fx(s.rAB[id]) + ' t=' + fx(s.t[id]) + ' rM=' + fx(s.rM[id]) + '\n');
-        for (const x of [...s.stop, ...s.invalid, ...s.kill]) process.stdout.write('  - ' + x + '\n');
-    }
-    for (const id of LANES) process.stdout.write('MEDIAN ' + id + ' r=' + fx(j.med.r[id]) + ' rAB=' + fx(j.med.rAB[id]) + ' rM=' + fx(j.med.rM[id]) + '\n');
-    for (const r of j.reasons) process.stdout.write('REASON ' + r + '\n');
-    process.stdout.write('U9 ' + j.verdict + ' valid=' + j.valid + '/' + HOLDS + ' attempts=' + j.attempts + ' gVoidCleanP=' + j.gVoid + '\n');
+    process.stdout.write(judgeText(j));
     return j.exit;
+}
+/** judgeText(judgeHolds result) -> the whole --judge stdout (HOLD / lane / MEDIAN / REASON / U9 lines). Pure. */
+export function judgeText(j) {
+    const L = [];
+    for (const s of j.holds) {
+        L.push('HOLD ' + s.n + ' ' + s.status + (s.excluded ? ' (EXCLUDED: harness changed)' : ''));
+        for (const id of LANES) L.push('  ' + laneText(id, s));
+        for (const x of [...s.stop, ...s.invalid, ...s.kill]) L.push('  - ' + x);
+    }
+    for (const id of LANES) L.push('MEDIAN ' + id + ' r=' + fx(j.med.r[id]) + ' rAB=' + fx(j.med.rAB[id]) + ' rM=' + fx(j.med.rM[id]) + RAB_TIER);
+    for (const r of j.reasons) L.push('REASON ' + r);
+    L.push('U9 ' + j.verdict + ' valid=' + j.valid + '/' + HOLDS + ' attempts=' + j.attempts + ' gVoidCleanP=' + j.gVoid);
+    return L.join('\n') + '\n';
 }
 
 function isMain() { try { return typeof process.argv[1] === 'string' && realpathSync(process.argv[1]) === realpathSync(ME); } catch (e) { return false; } }

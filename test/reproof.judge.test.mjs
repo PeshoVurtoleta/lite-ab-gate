@@ -9,7 +9,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { judgeHolds, decide, parseLog, assessLog, buildMutant, sha256, summary, PIN, ORDER, GATED, BAND, MUT } from '../bench/reproof.mjs';
+import { judgeHolds, decide, holdBand, parseLog, assessLog, buildMutant, sha256, summary, PIN, ORDER, GATED, BAND, MUT } from '../bench/reproof.mjs';
+import * as R from '../bench/reproof.mjs';   // namespace: R.judgeText / R.laneText are absent on the frozen build (U9A4, C-69)
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const LANES = Object.keys(GATED);
@@ -128,7 +129,6 @@ const ROWS = [
     ['B/A x1.04 on every G run (and on M, which is G + 1 line)', (hs) => { for (const h of hs) for (const [role, k] of [['G', 0], ['G', 1], ['M', 0]]) { const i = slot(h, role, k); h.logs[i] = scaleB(h.logs[i], MUT); } }, 'KILL', /median r\(B\/A\)=1\.04/],
     ['word flip (G, hold 1, bounds:1e5:1e3 SLOWER -> WITHIN)', (hs) => { const h = hs[0], i = slot(h, 'G', 0); h.logs[i] = edit1(h.logs[i], '(gated) A=44.09[43.66..44.23] B=1981.70[1971.31..1986.38] ns/op B/A=45.009[44.810..45.247] word=SLOWER', '(gated) A=44.09[43.66..44.23] B=1981.70[1971.31..1986.38] ns/op B/A=45.009[44.810..45.247] word=WITHIN'); }, 'KILL', /G FINDING bounds:1e5:1e3 printed word WITHIN/],
     ['consistent G FINDING (G, hold 2: null:1e5:1e3 B x1.10, word=SLOWER, VERDICT FINDING)', (hs) => { const h = hs[1], i = slot(h, 'G', 0); let t = scaleB(h.logs[i], 1.10, ['null:1e5:1e3']); const res = lineOf(t, 'RESULT lane=null:1e5:1e3 '); t = edit1(t, res, res.replace(' word=WITHIN ', ' word=SLOWER ')); t = edit1(t, lineOf(t, 'VERDICT '), 'VERDICT FINDING wrong-gated=[null:1e5:1e3 SLOWER]'); h.logs[i] = t; }, 'KILL', /G FINDING null:1e5:1e3 word SLOWER \(gated WITHIN\)/],
-    ['B/AB x1.04 on every G and M run (B/A unchanged)', (hs) => { for (const h of hs) for (const [role, k] of [['G', 0], ['G', 1], ['M', 0]]) { const i = slot(h, role, k); const res = lineOf(h.logs[i], 'RESULT lane=bounds:1e5:1e5 '); const ab = / B\/AB=(\S+?)\[(\S+?)\.\.(\S+?)\]/.exec(res); h.logs[i] = edit1(h.logs[i], res, res.replace(ab[0], ' B/AB=' + f3({ med: Number(ab[1]) * MUT, q1: Number(ab[2]) * MUT, q3: Number(ab[3]) * MUT }))); } }, 'KILL', /median r\(B\/AB\)=1\.04/],
     ['VERDICT line dropped (G, hold 5)', (hs) => { const h = hs[4], i = slot(h, 'G', 1); h.logs[i] = edit1(h.logs[i], '\n' + lineOf(h.logs[i], 'VERDICT ') + '\n', '\n'); }, 'STOP', /VERDICT lines: 0/],
     ['4 valid holds (hold 5 not run)', (hs) => hs.slice(0, 4), 'PENDING', /4\/5 valid holds/],
     ['NOT-TF tool line (G, hold 1)', (hs) => { const h = hs[0], i = slot(h, 'G', 0); h.logs[i] = edit1(h.logs[i], '\nPROV end ', '\nVOID NOT-TF lane=null:1e5:1e3: NOT-TF tool timedRounds (TF at window start true, end false)\nPROV end '); }, 'KILL', /NOT-TF tool/],
@@ -258,6 +258,46 @@ for (const [f, want] of [[0.9499, 'PENDING'], [0.9501, 'PASS'], [1.0499, 'PASS']
         assert.ok(Math.abs(j.holds[1].t['bounds:1e5:1e5'] - f) < 1e-6, String(j.holds[1].t['bounds:1e5:1e5']));
     });
 }
+// U9A4 (C-69, A40): B/AB is REPORTED, never banded. Expected values by plain arithmetic: G1 + G2 B/AB x1.04, P untouched
+// -> rAB = (1.04 x + 1.04 x) / (x + x) = 1.04; B/A untouched -> r = 1. Red on 88699a64 (it KILLs on median r(B/AB)=1.04).
+const abAll = (hs) => { for (const h of hs) for (const [role, k] of [['G', 0], ['G', 1], ['M', 0]]) { const i = slot(h, role, k); h.logs[i] = scaleAB(h.logs[i], MUT, 'bounds:1e5:1e5'); } };
+test('C-69: B/AB x1.04 on every G and M run (B/A unchanged) -> PASS, 5 VALID, no reasons, median rAB 1.04 REPORTED', () => {
+    const j = run(abAll);
+    assert.equal(j.verdict, 'PASS', j.reasons.join('\n'));
+    assert.equal(j.valid, 5);
+    assert.deepEqual(j.reasons, []);
+    near(j.med.rAB['bounds:1e5:1e5'], 1.04, 'median rAB');
+    for (const id of LANES) near(j.med.r[id], 1, 'median r ' + id);
+});
+test('C-69 N1: G1 + G2 B/AB x1.10 on bounds:1e5:1e5 (hold 1 only) -> PASS and holdBand(hold 1) = []', () => {
+    const j = run((hs) => { const h = hs[0]; for (const k of [0, 1]) { const i = slot(h, 'G', k); h.logs[i] = scaleAB(h.logs[i], 1.10, 'bounds:1e5:1e5'); } });
+    assert.equal(j.verdict, 'PASS', j.reasons.join('\n'));
+    near(j.holds[0].rAB['bounds:1e5:1e5'], 1.10, 'hold 1 rAB');
+    assert.deepEqual(holdBand(j.holds[0]), []);
+});
+test('C-69 N2: G1 B x1.12 on bounds:1e5:1e5 (hold 1; r = (1.12 + 1) / 2 = 1.06, rAB ~1.06 too) -> KILL on exactly 1 band reason, r(B/A) only', () => {
+    const j = run((hs) => { const h = hs[0], i = slot(h, 'G', 0); h.logs[i] = scaleB(h.logs[i], 1.12, ['bounds:1e5:1e5']); });
+    assert.equal(j.verdict, 'KILL', j.reasons.join('\n'));
+    near(j.holds[0].r['bounds:1e5:1e5'], 1.06, 'r');
+    near(j.holds[0].rAB['bounds:1e5:1e5'], 1.06, 'rAB');
+    const band = j.reasons.filter((r) => /^KILL hold 1: /.test(r));
+    assert.equal(band.length, 1, j.reasons.join('\n'));
+    assert.match(band[0], /r\(B\/A\)=/);
+    assert.equal(j.reasons.filter((r) => /B\/AB/.test(r)).length, 0, j.reasons.join('\n'));
+});
+test('C-69 N3: judgeText on the B/AB x1.04 edit -> 18 lane / MEDIAN lines carry the REPORTED suffix, no REASON line, last line U9 PASS', () => {
+    const j = run(abAll);
+    const lines = R.judgeText(j).split('\n').filter((l) => l !== '');
+    const SUF = ' rAB-tier=REPORTED(U9F)';
+    assert.equal(lines.filter((l) => l.endsWith(SUF)).length, 18);
+    assert.equal(lines.filter((l) => /^ {2}\S+ r=/.test(l) && l.endsWith(SUF)).length, 15);
+    const med = lines.filter((l) => l.startsWith('MEDIAN '));
+    assert.equal(med.length, 3);
+    for (const l of med) assert.ok(l.endsWith(SUF), l);
+    assert.match(med.find((l) => l.startsWith('MEDIAN bounds:1e5:1e5 ')), / rAB=1\.04\d* /);
+    assert.equal(lines.filter((l) => l.startsWith('REASON ')).length, 0);
+    assert.equal(lines[lines.length - 1], 'U9 PASS valid=5/5 attempts=5 gVoidCleanP=0');
+});
 // C-45 (b): the mutant is judged on its 5-hold median r', never per hold
 test('M unscaled in ONE hold only (its r\' = 1.000) -> PASS: the 5-hold median r\' still fires [C-45]', () => {
     const j = run((hs) => { const h = hs[2], i = slot(h, 'M', 0); h.logs[i] = edit1(G_LOGS[2], ' sha256 ' + G_SHA.slice(0, 8) + '\n', ' sha256 ' + M_SHA.slice(0, 8) + '\n'); });
@@ -302,7 +342,7 @@ for (const [v, want] of [[1.0499, 'PASS'], [1.0501, 'KILL'], [0.9501, 'PASS'], [
         assert.equal(withR((c) => { if (c.n === 3) c.r['bounds:1e5:1e5'] = v; }).verdict, want);
     });
 }
-for (const [v, want] of [[1.0499, 'PASS'], [1.0501, 'KILL']]) {
+for (const [v, want] of [[1.0499, 'PASS'], [1.0501, 'PASS'], [0.9501, 'PASS'], [0.9499, 'PASS']]) {   // C-69: r(B/AB) is REPORTED, never banded
     test('boundary: one hold r(B/AB) = ' + v + ' on bounds:1e5:1e3 -> ' + want, () => {
         assert.equal(withR((c) => { if (c.n === 2) c.rAB['bounds:1e5:1e3'] = v; }).verdict, want);
     });
@@ -408,4 +448,42 @@ test('mutant recheck log (branch-free M on 311761f, real): errors exactly [no SE
     const a = assessLog(o);
     assert.deepEqual(a.voids, []);
     assert.deepEqual(a.kill, ['bounds:1e5:1e5 tool-bytes=4320']);
+});
+
+// ---- U9A4 (C-69): calibration -3 (G b418c3a), the real B/AB-only KILL. Expected values by plain arithmetic over the logs' own
+// RESULT B/AB / B/A medians; the frozen 88699a64 judged this hold KILL on r(B/AB)=1.0927 alone.
+const CAL3 = join(ROOT, 'test', 'fixtures', 'reproof', 'b418c3a-3');
+const cal3 = (f) => readFileSync(join(CAL3, f), 'utf8');
+const G3_SHA = '1d4d4255d94d3e90ad9ad198d1340aef88a51f86f137aaae55d3053596f04fa8';   // b418c3a ABGate.js (.handoff/frozen/u9-b418c3a/SHA)
+const CAL3_ROLE = { 1: 'G', 2: 'P', 3: 'M', 4: 'P', 5: 'G' };
+const cal3Hold = () => ({ outer: cal3('outer.log'), logs: { 1: cal3('1-G.log'), 2: cal3('2-P.log'), 3: cal3('3-M.log'), 4: cal3('4-P.log'), 5: cal3('5-G.log') } });
+const cal3Med = (f, id, col) => { const m = new RegExp('^RESULT lane=' + id.replace(/\./g, '\\.') + ' .* ' + col + '=([0-9.]+)\\[', 'm').exec(cal3(f)); assert.notEqual(m, null, f + ' ' + id + ' ' + col); return Number(m[1]); };
+test('cal -3 fixtures match their SHA256SUMS (6 rows)', () => {
+    const rows = cal3('SHA256SUMS').trim().split('\n');
+    assert.equal(rows.length, 6);
+    for (const r of rows) { const [s, f] = r.split(/\s+/); assert.equal(sha256(readFileSync(join(CAL3, f))), s, f); }
+    assert.deepEqual(rows.map((r) => r.split(/\s+/)[1]), ['1-G.log', '2-P.log', '3-M.log', '4-P.log', '5-G.log', 'outer.log']);
+});
+test('cal -3: every child log parses with 0 errors; dropping the last line is an error (must-fail)', () => {
+    for (const k of [1, 2, 3, 4, 5]) {
+        const f = k + '-' + CAL3_ROLE[k] + '.log', t = cal3(f);
+        assert.deepEqual(parseLog(t, CAL3_ROLE[k]).errors, [], f);
+        const cut = t.trimEnd().split('\n').slice(0, -1).join('\n') + '\n';
+        assert.ok(parseLog(cut, CAL3_ROLE[k]).errors.length > 0, f + ' truncated');
+    }
+});
+test('cal -3 (real, G b418c3a): the hold is VALID, holdBand [], verdict PENDING (exit 2); r(B/AB) 1.0927 is REPORTED, not a KILL [C-69]', () => {
+    const j = judgeHolds([cal3Hold()], { gSha: G3_SHA });
+    const s = j.holds[0];
+    assert.equal(s.status, 'VALID', [...s.stop, ...s.invalid, ...s.kill].join(' | '));
+    assert.deepEqual(holdBand(s), []);
+    assert.equal(j.verdict, 'PENDING', j.reasons.join('\n'));
+    assert.equal(j.exit, 2);
+    const id = 'bounds:1e5:1e5';
+    const ab = (cal3Med('1-G.log', id, 'B/AB') + cal3Med('5-G.log', id, 'B/AB')) / (cal3Med('2-P.log', id, 'B/AB') + cal3Med('4-P.log', id, 'B/AB'));
+    assert.ok(Math.abs(s.rAB[id] - ab) < 1e-12, s.rAB[id] + ' vs ' + ab);
+    assert.ok(ab >= 1.0926 && ab <= 1.0928, String(ab));
+    const ba = (cal3Med('1-G.log', id, 'B/A') + cal3Med('5-G.log', id, 'B/A')) / (cal3Med('2-P.log', id, 'B/A') + cal3Med('4-P.log', id, 'B/A'));
+    assert.ok(Math.abs(s.r[id] - ba) < 1e-12, s.r[id] + ' vs ' + ba);
+    assert.ok(ba >= 0.9899 && ba <= 0.9909, String(ba));
 });

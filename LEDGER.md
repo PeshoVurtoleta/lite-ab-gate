@@ -621,7 +621,7 @@ not X.
   total, burst9-U9EB3-mutants-r2.log); judge.extra TIER-SETTLE rows; test/hotbody.parity.test.mjs (DETERMINISTIC, npm test;
   burst9-U9EB3-npmtest-r2.log).
 - **Reopens with:** a new frozen G calibration re-run (after U9E review APPROVED) closes the U9E part; a callee tier-up inside the window on a settled lane reopens it.
-### C2. Calibration hold 0 on G b418c3a reads r(B/AB) 1.075-1.093 on bounds:1e5:1e5 in 3 of 3 runs: a per-hold band KILL *(FOUND 2026-11-26 burst 14, U9A3 calibration hold 0 -3; RULED Q-U9-ABBAND (a) diagnose first, SPEC C-68 / A38; DIAGNOSED 2026-11-26 burst 15, research unit U9F; RULED Q-U9F-BAND (a), SPEC C-69 / A39; fix unit U9A4 pending)*
+### C2. Calibration hold 0 on G b418c3a reads r(B/AB) 1.075-1.093 on bounds:1e5:1e5 in 3 of 3 runs: a per-hold band KILL *(FOUND 2026-11-26 burst 14, U9A3 calibration hold 0 -3; RULED Q-U9-ABBAND (a) diagnose first, SPEC C-68 / A38; DIAGNOSED 2026-11-26 burst 15, research unit U9F; RULED Q-U9F-BAND (a), SPEC C-69 / A39; R3 repeat NOT REPRODUCED 2026-11-27 burst 16, hoist attribution UNCONFIRMED; RE-RULED Q-U9A4-R3B REPORTED, mechanism open, SPEC C-69 / A40; fix unit U9A4 in progress)*
 - **What happened:** calibration hold 0 -3 (G = frozen b418c3a / ABGate.js 1d4d4255, harness 88699a64, 2026-11-26
   16:28-16:31Z, QUIET load1 2.71, baseline 2.34, Node v26.8.2, darwin arm64 Apple M4 Pro 12 cores, V8 14.6.202.34-node.28, 1 run, not counted) exited 3: `JUDGE kill
   bounds:1e5:1e5 r(B/AB)=1.0927 outside [0.95, 1.05]`. Same lane, same G, earlier calibrations: 1.0752 (-1) and
@@ -669,7 +669,17 @@ not X.
   the re-proof stops KILLing on r(B/AB) on every lane (printed, tagged REPORTED); every B/A band and the REPS-DRIFT word
   check stay. Fix unit U9A4, gated on one repeat of U9F R3 reading CONFIRMED (any other outcome stops U9A4). Not chosen:
   (b) freeze P' = P + hoist, (c) repeat R3 before ruling, (d) band 1e5:1e3 only.
-- **Reopens with:** a rerun of R3 whose rho_Q <= 1.02 (the hoist then does not explain the gap either); a Node whose
+- **R3b, the U9A4 gate (2026-11-27 burst 16; PRELIMINARY, REPORTED):** one more `--strict` R3 run (06:30-06:47Z, start
+  QUIET load1 2.67, end 2.25, but 8 of 25 cases started at load1 >= baseline + 1; exits 25/25, busy-node empty; same
+  four shas) read NOT REPRODUCED: rho_P 1.0461 (<= 1.05), rho_Q 1.0078 (A/A 1.0257, must-fail 1.1245); B/AB P/G 0.9496,
+  Q/G 0.9817; B/A P/G 1.0005. This meets the "Reopens with" condition below (rho_Q <= 1.02): the hoist does NOT
+  explain the gap on this run, so the root cause above is UNCONFIRMED (R3 CONFIRMED by 0.0025, R3b against). What
+  stands in every rung: G's AB column reads 5-8 % cheaper than P's (B/AB P/G 0.920 / 0.933 / 0.950) while B/A agrees.
+  Attempt 1 read 76 (nothing ran): waitrun.sh waited for lock free only; it now waits for free AND QUIET.
+- **Re-ruling:** 2026-11-27 burst 16 (maintainer, AskUserQuestion): Q-U9A4-R3B = "REPORTED, mechanism open (Recommended)": keep the C-69
+  harness change (B/AB REPORTED, every B/A band and STOP / INVALID rule unchanged) on the reproducible G-vs-P AB
+  offset, mechanism OPEN. Not chosen: "Research rung U9G first", "Band 1e5:1e3 only", "Stop and park U9A4".
+- **Reopens with:** a rerun of R3 whose rho_Q <= 1.02 (MET by R3b; the mechanism is open, see above); a Node whose
   global `performance` read inside the span costs nothing; a change to either tool's clock read path.
 
 ## D. Process lessons
