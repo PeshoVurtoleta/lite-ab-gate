@@ -621,14 +621,14 @@ not X.
   total, burst9-U9EB3-mutants-r2.log); judge.extra TIER-SETTLE rows; test/hotbody.parity.test.mjs (DETERMINISTIC, npm test;
   burst9-U9EB3-npmtest-r2.log).
 - **Reopens with:** a new frozen G calibration re-run (after U9E review APPROVED) closes the U9E part; a callee tier-up inside the window on a settled lane reopens it.
-### C2. Calibration hold 0 on G b418c3a reads r(B/AB) 1.075-1.093 on bounds:1e5:1e5 in 3 of 3 runs: a per-hold band KILL *(FOUND 2026-11-26 burst 14, U9A3 calibration hold 0 -3; RULED Q-U9-ABBAND (a) diagnose first, SPEC C-68 / A38; status: OPEN, research unit U9F)*
+### C2. Calibration hold 0 on G b418c3a reads r(B/AB) 1.075-1.093 on bounds:1e5:1e5 in 3 of 3 runs: a per-hold band KILL *(FOUND 2026-11-26 burst 14, U9A3 calibration hold 0 -3; RULED Q-U9-ABBAND (a) diagnose first, SPEC C-68 / A38; DIAGNOSED 2026-11-26 burst 15, research unit U9F; RULED Q-U9F-BAND (a), SPEC C-69 / A39; fix unit U9A4 pending)*
 - **What happened:** calibration hold 0 -3 (G = frozen b418c3a / ABGate.js 1d4d4255, harness 88699a64, 2026-11-26
   16:28-16:31Z, QUIET load1 2.71, baseline 2.34, Node v26.8.2, darwin arm64 Apple M4 Pro 12 cores, V8 14.6.202.34-node.28, 1 run, not counted) exited 3: `JUDGE kill
   bounds:1e5:1e5 r(B/AB)=1.0927 outside [0.95, 1.05]`. Same lane, same G, earlier calibrations: 1.0752 (-1) and
   1.0898 (-2) (-1 2026-11-26 05:23Z load1 1.82; -2 09:43Z load1 1.46; same host / Node, 1 run each); both holds were INVALID first, which hid the KILL. On the pre-C-48 G d4991c39 (U9-cal): 1.0172 (2026-11-25 06:47Z, WHY QUIET load1 2.80, LOAD start 2.90, 1 run). r(B/A)
   on that lane: 0.9905 / 0.9899 / 0.9904. Calibration numbers are VOID as evidence of the re-proof (law 6); they are
   recorded as the reason for the diagnosis.
-- **Reason (candidate, UNVERIFIED):** reps A:256 B:1 AB:1; per-run ab (A fresh at B's reps / A) reads 1.079 / 1.102 on
+- **Reason (burst-14 candidate, REFUTED by U9F R2; kept for the record):** reps A:256 B:1 AB:1; per-run ab (A fresh at B's reps / A) reads 1.079 / 1.102 on
   G and 1.106 on M but 1.185 / 1.208 on P, so B/AB = (B/A) / ab reads about 9 % higher on G. Candidate: the C-48 settle
   passes (G only) tier the AB copies' callee `boundsInto` before the window (C1 side finding: AB copies tier up at their
   4th call), so G's AB column is warmer than the frozen prototype's.
@@ -642,7 +642,35 @@ not X.
   counts plus a few quiet-lock runs, a FINDING + LEDGER entry, then the maintainer rules the band. U9 B2 and U10b stay
   blocked." Not chosen: "(b) Band B/A only", "(c) Keep the band, run U9", "(d) Leave U9 PENDING".
   0 of 8 counted U9 attempts spent.
-- **Reopens with:** n/a (open); U9F FINDING + a maintainer band ruling.
+- **Root cause (U9F, .handoff/research/U9F/FINDING.md; PRELIMINARY, REPORTED):** not the settle. R1 (untimed,
+  deterministic, 4/4 processes per arm): the settle does change the tier at the window edge -- G has TF on 12/12
+  A-family `boundsInto` callees at OPEN and compiles none inside the window; G under AB_GATE_INJECT=no-settle and P have 8
+  (AA x3, AB x3, A#1, A#2) at Maglev and compile them inside the window; TF 12/12 at CLOSE everywhere. R2 (one
+  `quiet-lock run --strict`, 5 rounds x 5 arms, 2026-11-26 19:53-20:09Z, QUIET load1 1.28, baseline 2.34): G without the
+  settle reads G's AB level, rho_N = 1.0138 against rho_P = 1.0866 (A/A 1.0194, must-fail AB x 1.10 1.1022) -> the
+  candidate is DEAD. R3 (one `--strict` run, 21:08-21:25Z, QUIET load1 1.48): reverting only C-48's other change -- G's
+  timedRounds reads the clock through `const PERF = performance` (G.js:711), P reads the global `performance` at each
+  clock read, one lookup inside the span -- reads P's level, rho_Q = 1.0525 against rho_P = 1.0705, ratio 0.9832 (abPost 0.9984;
+  A/A 0.9675, must-fail 1.0876) -> CONFIRMED by the pre-registered rule, margin 0.0025 over its 1.05 bar, resting on pooling G with G' (rho_Q 1.029 against G alone). So P's AB
+  column (reps 1, ~16 us span) carries a fixed in-span clock cost (~1.3 us, nominal, derived) that G removed on purpose;
+  B/A is untouched (P/G 1.004 / 1.006). Not shown: why that read costs microseconds (Node's lazy `performance` accessor is
+  the suspect, never isolated). Side finding: without the settle the in-run AB IQR is ~3x wider (round 1-3 tier-up, C1).
+  The inherited X2 "1.19x at reps 1" was measured on P and includes this in-span read (G reads ~1.08-1.14 here); X2 stays
+  the prototype's number.
+- **Evidence (U9F):** .handoff/research/U9F/ INTAKE.md (+ amendments 1, 2, each before its rung), PROGRESS.md,
+  RESULT-R1.txt / RESULT-R2.txt / RESULT-R3.txt, logs/r1-r3, bits.mjs (status-bit oracle; its first draft failed on V8's
+  compilation cache sharing one SFI across identical `new Function` sources, fixed before R1), mkvariant.mjs;
+  .handoff/PROPOSAL-U9F.md. Host darwin arm64 Apple M4 Pro, Node v26.8.2, 1 run per rung.
+- **Law (U9F):** law 1 (the A/A twin and a must-fail arm made a 1.4 % vs 8.7 % split readable); law 5 (each rung's rule
+  was written before it ran; R2's DEAD stopped the settle story). No new numbered law yet; the lesson: a clock read inside
+  the span is part of what a short column measures -- compare AB columns only between tools that read the clock the
+  same way.
+- **Band ruling:** 2026-11-26 burst 15 (maintainer, AskUserQuestion): Q-U9F-BAND = "(a) B/AB REPORTED (Recommended)":
+  the re-proof stops KILLing on r(B/AB) on every lane (printed, tagged REPORTED); every B/A band and the REPS-DRIFT word
+  check stay. Fix unit U9A4, gated on one repeat of U9F R3 reading CONFIRMED (any other outcome stops U9A4). Not chosen:
+  (b) freeze P' = P + hoist, (c) repeat R3 before ruling, (d) band 1e5:1e3 only.
+- **Reopens with:** a rerun of R3 whose rho_Q <= 1.02 (the hoist then does not explain the gap either); a Node whose
+  global `performance` read inside the span costs nothing; a change to either tool's clock read path.
 
 ## D. Process lessons
 
