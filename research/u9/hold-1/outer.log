@@ -1,0 +1,34 @@
+OUTER u9-reproof hold=1 order=P,G,M,G,P
+DATE 2026-11-27T07:34:13.559Z
+HOST platform=darwin arch=arm64 cores=12 cpu=Apple M4 Pro
+NODE v26.8.2 v8 14.6.202.34-node.28
+LOAD start 1.22 1.86 2.78 baseline 2.34 quiet-lock quiet
+WHY QUIET (load1 1.22, baseline 2.34, 12 cores)
+BUSY start []
+PIDS outer=21244 parent=21237
+SHA P 74f1a3d41e72e83fd5690bdae9005ce5dbf200ab05b906ca4249cb427d1068c4 /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/test/fixtures/r1/ab-proto.mjs
+SHA G 1d4d4255d94d3e90ad9ad198d1340aef88a51f86f137aaae55d3053596f04fa8 /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/.handoff/frozen/u9-b418c3a/ABGate.js
+SHA M eb4fb731507d7d97737a78ffb4d4e30e44bc348c95b7a438f1eb555dad6e1bbe /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/research/u9/hold-1/M-ABGate.js
+SHA lane 2377d1937815b1d22d527a1ce2f9eeb4f0f496cf14065873d466657aea17c7e2
+SHA ohlc a600028c4cbba39086f93b21be34c57305e4d4acaec35d9faded8ac46dc275b2
+SHA baseline 9c875a5ecb9bf8ef26436254d72b8d9c2ba9345167bd4c4b7d93d6a567bbe89e
+SHA harness 1d8173fddf8abd9a508453ec1f1a4b84782095fddaf084fdc1371aa74e087d52
+RUNS 5 flags --expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc cwd /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/test/fixtures/r1
+ENV deleted for every child: LAB_INJECT(unset) AB_GATE_INJECT(unset) GITHUB_ACTIONS(unset) NODE_OPTIONS(unset)
+COLD polls=6 cap=60 interval-ms=500 dwell-ms=2000 pair-ms=2214 prev-outer=0.1 prev-parent=0 outer=0.1 parent=0 settled=yes
+CHILD 1 P exit 0 ms 32219 stderr-bytes 0 log-sha256 263edc421e63e54dcc8b2cc4465c25b409c7b51c5a8fae3644c62d1cda885b4c
+REJUDGE 1 P exit 0 verdict PASS match yes
+CHILD 2 G exit 0 ms 42447 stderr-bytes 0 log-sha256 b4061097237b76548a9dec1b849686aba1130f688bb4c1543aa11d064d3621eb
+REJUDGE 2 G exit 0 verdict PASS match yes
+CHILD 3 M exit 0 ms 42306 stderr-bytes 0 log-sha256 b0e11e00028161e3190b458e6b697239bc59d1d3fcad0fb4925064ea63ec1098
+REJUDGE 3 M exit 0 verdict PASS match yes
+CHILD 4 G exit 0 ms 42571 stderr-bytes 0 log-sha256 50111e04f930514f06b5b6d326cf53650d8d5ed1d2205641af05bff143562db2
+REJUDGE 4 G exit 0 verdict PASS match yes
+CHILD 5 P exit 0 ms 33086 stderr-bytes 0 log-sha256 ad3fd2affa4f6b03b0e79289419d3376ed1d385b5ed5474c985a3863ac1aa88f
+REJUDGE 5 P exit 0 verdict PASS match yes
+LOAD end 1.62 1.76 2.54
+BUSY end []
+JUDGE lane bounds:1e5:1e3 r=1.0167 rAB=1.0004 t=0.9939 rM=1.0221 rAB-tier=REPORTED(U9F)
+JUDGE lane bounds:1e5:1e5 r=1.0044 rAB=1.0986 t=1.0262 rM=1.0455 rAB-tier=REPORTED(U9F)
+JUDGE lane null:1e5:1e3 r=1.0035 rAB=n/a t=0.9960 rM=1.0394 rAB-tier=REPORTED(U9F)
+JUDGE hold 1 VALID

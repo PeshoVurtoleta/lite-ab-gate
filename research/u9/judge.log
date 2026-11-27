@@ -1,0 +1,24 @@
+HOLD 1 VALID
+  bounds:1e5:1e3 r=1.0167 rAB=1.0004 t=0.9939 rM=1.0221 rAB-tier=REPORTED(U9F)
+  bounds:1e5:1e5 r=1.0044 rAB=1.0986 t=1.0262 rM=1.0455 rAB-tier=REPORTED(U9F)
+  null:1e5:1e3 r=1.0035 rAB=n/a t=0.9960 rM=1.0394 rAB-tier=REPORTED(U9F)
+HOLD 2 VALID
+  bounds:1e5:1e3 r=0.9916 rAB=1.0014 t=0.9910 rM=1.0452 rAB-tier=REPORTED(U9F)
+  bounds:1e5:1e5 r=1.0065 rAB=1.0795 t=0.9903 rM=1.0339 rAB-tier=REPORTED(U9F)
+  null:1e5:1e3 r=0.9970 rAB=n/a t=0.9980 rM=1.0421 rAB-tier=REPORTED(U9F)
+HOLD 3 VALID
+  bounds:1e5:1e3 r=0.9934 rAB=0.9930 t=1.0009 rM=1.0476 rAB-tier=REPORTED(U9F)
+  bounds:1e5:1e5 r=1.0052 rAB=1.0749 t=1.0037 rM=1.0378 rAB-tier=REPORTED(U9F)
+  null:1e5:1e3 r=0.9975 rAB=n/a t=1.0030 rM=1.0481 rAB-tier=REPORTED(U9F)
+HOLD 4 VALID
+  bounds:1e5:1e3 r=1.0049 rAB=1.0064 t=1.0009 rM=1.0444 rAB-tier=REPORTED(U9F)
+  bounds:1e5:1e5 r=0.9949 rAB=1.0673 t=1.0038 rM=1.0486 rAB-tier=REPORTED(U9F)
+  null:1e5:1e3 r=0.9970 rAB=n/a t=0.9970 rM=1.0407 rAB-tier=REPORTED(U9F)
+HOLD 5 VALID
+  bounds:1e5:1e3 r=0.9944 rAB=1.0104 t=1.0055 rM=1.0309 rAB-tier=REPORTED(U9F)
+  bounds:1e5:1e5 r=0.9857 rAB=1.1087 t=0.9995 rM=1.0336 rAB-tier=REPORTED(U9F)
+  null:1e5:1e3 r=0.9995 rAB=n/a t=1.0030 rM=1.0410 rAB-tier=REPORTED(U9F)
+MEDIAN bounds:1e5:1e3 r=0.9944 rAB=1.0014 rM=1.0444 rAB-tier=REPORTED(U9F)
+MEDIAN bounds:1e5:1e5 r=1.0044 rAB=1.0795 rM=1.0378 rAB-tier=REPORTED(U9F)
+MEDIAN null:1e5:1e3 r=0.9975 rAB=n/a rM=1.0410 rAB-tier=REPORTED(U9F)
+U9 PASS valid=5/5 attempts=5 gVoidCleanP=0

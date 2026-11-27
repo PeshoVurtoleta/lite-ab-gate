@@ -1,0 +1,30 @@
+HEADER rung=ALL TIMED node v26.8.2 arch arm64 v8 14.6.202.34-node.28 cpu Apple M4 Pro K=11 C=3 ops=1024,1024,1024 minWindow=64,32,64 inject=null
+HEADER spec lite-ohlc-r1 lane-file /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/test/fixtures/r1/ohlc-lane.mjs lane-sha256=2377d1937815b1d22d527a1ce2f9eeb4f0f496cf14065873d466657aea17c7e2 transform=Ohlc.js:edited,baseline.mjs:edited | tool /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/.handoff/frozen/u9-b418c3a/ABGate.js sha256 1d4d4255
+HEADER frozen Ohlc.js /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/test/fixtures/r1/frozen/Ohlc.js sha256 a600028c ok; live /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteOhlc/Ohlc.js byte-identical -- ok (AB-G2)
+HEADER frozen baseline.mjs /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteABGate/test/fixtures/r1/frozen/baseline.mjs sha256 9c875a5e ok; live /Users/zakkster/Work/Portfolio/LiteLibrariesSuite/LiteOhlc/bench/baseline.mjs byte-identical -- ok (AB-G2)
+HEADER columns: A = base kernel, B = candidate, AA = A twin (fresh compilation), SLOW = A + spin at the A anchor, AB = A twin (fresh compilation) timed at B's reps, present only when B's reps differ from A's (then B/AB and wordAB are printed; else n/a); K + 1 rounds per window, round 0 a warm round discarded from every column (WARM line); flags --expose-gc --allow-natives-syntax --no-concurrent-recompilation --min-semi-space-size=4 --max-semi-space-size=4 --single-threaded-gc
+HEADER lane bounds:1e5:1e3 A=Ohlc.js B=baseline.mjs ops=1024 minWindow=64 spin=128 recLen=9
+HEADER lane bounds:1e5:1e5 A=Ohlc.js B=baseline.mjs ops=1024 minWindow=32 spin=112 recLen=9
+HEADER lane null:1e5:1e3 A=Ohlc.js B=Ohlc.js ops=1024 minWindow=64 spin=128 recLen=9
+HEADER rule: per OS, PASS = every gated lane reads its GATED word with its controls valid (aa median in [0.95, 1.05], slow median > 1.25 and q1 > 1.1, B/AB (B against AB = A at B's reps) reading the same word as B/A when B's reps differ from A's (else REPS-DRIFT; ab = AB / A is REPORTED, no band; equal reps print ab, B/AB, wordAB = n/a), bop A, B, AA, SLOW (+ AB when present) each in [0, 1/64), all finite); FINDING = a clean gated lane reads another word (even with other gated lanes VOID); NO VERDICT = any VOID or missing gated lane, a wrong run shape (one HEADER rung=ALL TIMED with K=11 C=3 and the shape fields, inject=null, one HEADER spec line with this lane file's lane-sha256 and transform=, one PROV start / end, one RESULT per lane) or any STOP / CRASH. NO VERDICT is never a PASS.
+HEADER GATED bounds:1e5:1e3=SLOWER bounds:1e5:1e5=SLOWER null:1e5:1e3=WITHIN; every other lane REPORTED
+PROV start 2026-11-27T07:46:36.571Z load 1.17 1.27 1.90 busy-node [] quiet-lock quiet
+CONTROL gc-window: empty clean; forced gc flips major (1) -- ok
+SETTLE lane=bounds:1e5:1e3 passes=1 pass-bytes=0 settled=yes
+WINDOW lane=bounds:1e5:1e3 tool-bytes=0 scavenges=0
+RESULT lane=bounds:1e5:1e3 (gated) A=45.28[44.95..45.38] B=2003.51[1996.58..2007.37] ns/op B/A=44.546[44.117..44.696] word=SLOWER B-A=1959.10[1951.50..1962.15]ns aa=0.999[0.993..1.003] slow=1.974[1.967..1.987] ab=1.798[1.774..1.815] B/AB=24.836[24.292..24.989] wordAB=SLOWER bop=A:0.0000,AA:0.0000,AB:0.0000,SLOW:0.0000,B:0.0000 win=512 reps=A:256,B:8,AB:8 spin=128 warm=1
+RAW lane=bounds:1e5:1e3 B/A=44.6325,43.9211,45.1145,44.5809,44.2666,44.5464,44.7588,41.3227,45.3263,44.2302,44.0044 AA=0.9912,0.9955,1.0020,1.0045,0.9993,0.9974,1.0031,1.0222,0.9623,0.9914,1.0034 SLOW=1.9701,1.9762,2.0018,1.9741,1.9861,1.9882,1.9727,1.8990,1.9876,1.9641,1.9623 AB=1.7725,1.8139,1.8165,1.7754,1.8130,1.7772,1.7978,1.6956,1.9110,1.8754,1.7664
+WARM lane=bounds:1e5:1e3 round 0 (discarded, not in any median) A/A=1.0000 B/A=39.8096 AA/A=0.9517 SLOW/A=1.7930 AB/A=1.6391
+SETTLE lane=bounds:1e5:1e5 passes=2 pass-bytes=7584,0 settled=yes
+WINDOW lane=bounds:1e5:1e5 tool-bytes=0 scavenges=0
+RESULT lane=bounds:1e5:1e5 (gated) A=27.96[27.82..28.14] B=160430.18[160316.16..160529.91] ns/op B/A=5740.887[5694.484..5760.006] word=SLOWER B-A=160402.36[160288.06..160501.68]ns aa=1.006[1.001..1.016] slow=2.113[2.088..2.116] ab=1.109[1.085..1.138] B/AB=5163.727[4998.820..5264.128] wordAB=SLOWER bop=B:0.0000,AA:0.0000,AB:0.0000,A:0.0000,SLOW:0.0000 win=512 reps=A:256,B:1,AB:1 spin=112 warm=1
+RAW lane=bounds:1e5:1e5 B/A=5740.8870,5779.8436,5729.6340,5742.4475,5775.6103,5602.5678,5767.5878,5633.3789,5752.4245,5680.7818,5708.1865 AA=1.0075,1.0187,1.0011,1.0062,1.0161,0.9794,1.0157,0.9899,1.0036,0.9999,1.0240 SLOW=2.1022,2.1490,2.0857,2.0909,2.1132,2.0430,2.1143,2.0588,2.1167,2.1152,2.1563 AB=1.0884,1.1407,1.0762,1.1325,1.1088,1.1363,1.1761,1.0910,1.3124,1.0813,1.0730
+WARM lane=bounds:1e5:1e5 round 0 (discarded, not in any median) A/A=1.0000 B/A=5762.6367 AA/A=1.0116 SLOW/A=2.0960 AB/A=1.0925
+SETTLE lane=null:1e5:1e3 passes=1 pass-bytes=0 settled=yes
+WINDOW lane=null:1e5:1e3 tool-bytes=0 scavenges=0
+RESULT lane=null:1e5:1e3 (gated) A=45.20[44.86..45.52] B=44.79[44.66..45.43] ns/op B/A=0.995[0.991..1.001] word=WITHIN B-A=-0.24[-0.40..0.04]ns aa=0.997[0.993..1.000] slow=1.993[1.978..2.017] ab=n/a B/AB=n/a wordAB=n/a bop=AA:0.0000,A:0.0000,SLOW:0.0000,B:0.0000 win=512 reps=A:256,B:256 spin=128 warm=1
+RAW lane=null:1e5:1e3 B/A=0.9890,0.9934,1.0051,0.9947,0.9939,0.9873,0.9995,1.0022,0.9847,0.9983,1.0028 AA=0.9903,0.9973,1.0087,1.0004,0.9957,0.9859,1.0001,0.9962,0.9897,1.0019,1.0003 SLOW=1.9959,2.0444,2.0388,1.9932,2.0977,1.9944,1.9873,1.9757,1.9426,1.9739,1.9803
+WARM lane=null:1e5:1e3 round 0 (discarded, not in any median) A/A=1.0000 B/A=0.8945 AA/A=0.9582 SLOW/A=1.8083
+PROV end 2026-11-27T07:47:18.869Z load 1.22 1.26 1.86 busy-node [] quiet-lock quiet
+REPORTED (never read by the verdict) 
+VERDICT PASS gated=3/3 clean, every word as expected | cpu Apple M4 Pro | arch arm64 | node v26.8.2
